@@ -1,3 +1,7 @@
+server:
+  servlet:
+    context-path: /sales
+
 spring:
   application:
     name: sales
