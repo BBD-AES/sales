@@ -23,13 +23,9 @@ import java.util.List;
 
 /**
  * 유스케이스 구현 = "오케스트레이션 계층".
- *
- * 책임 분리:
- *  - 권한(역할/소속창고) 검사  -> 여기(application). CurrentUser 라는 보안 개념을 다루므로.
- *  - 상태 전이 업무 규칙        -> 도메인(SalesOrder)에 위임. 여기선 메서드 호출만.
- *  - DB/재고/이벤트            -> out 포트로 위임. 구현(JPA/Kafka/Inventory)은 모른다.
- *
- * 트랜잭션: 쓰기 메서드는 클래스 기본 @Transactional, 조회는 readOnly.
+ *  - 권한(역할/소속창고) 검사  -> 여기(application).
+ *  - 상태 전이 업무 규칙        -> 도메인(SalesOrder)에 위임.
+ *  - DB/재고/이벤트            -> out 포트로 위임.
  */
 @Service
 @RequiredArgsConstructor
@@ -57,13 +53,10 @@ public class SalesOrderService implements SalesOrderUseCase {
 
         SalesOrderSearchCriteria criteria = new SalesOrderSearchCriteria(
                 query.status(), query.priority(), fromScope,
-                query.toWarehouseCode(), query.requestedBy(), from, to
-        );
+                query.toWarehouseCode(), query.requestedBy(), from, to);
 
         SalesOrderPage page = repository.search(criteria, query.page(), query.size());
-        List<SalesOrderSummaryResult> items = page.content().stream()
-                .map(this::toSummary)
-                .toList();
+        List<SalesOrderSummaryResult> items = page.content().stream().map(this::toSummary).toList();
         PaginationResult pagination = new PaginationResult(
                 page.page(), page.size(), page.totalElements(), page.totalPages());
         return new SalesOrderPageResult<>(items, pagination);
@@ -82,7 +75,6 @@ public class SalesOrderService implements SalesOrderUseCase {
     @Override
     public SalesOrderResult create(CreateSalesOrderCommand command) {
         CurrentUser user = command.currentUser();
-        // 본인 창고(지점) 요청만. 관리자는 예외.
         if (!user.isAdmin() && !command.fromWarehouseCode().equals(user.warehouseCode())) {
             throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
         }
@@ -90,16 +82,16 @@ public class SalesOrderService implements SalesOrderUseCase {
         List<SalesOrderLine> lines = toDomainLines(command.lines());
         String soNumber = repository.nextSoNumber();
 
+        // 창고명 스냅샷: 생성 시점에 한 번만 조회해 박는다(이후 읽기는 원격 호출 0).
+        String fromName = catalogPort.warehouseName(command.fromWarehouseCode());
+        String toName = catalogPort.warehouseName(command.toWarehouseCode());
+
         SalesOrder so = SalesOrder.request(
                 soNumber,
-                command.fromWarehouseCode(),
-                command.toWarehouseCode(),
-                command.priority(),
-                command.note(),
-                lines,
-                user.employeeNumber(),
-                LocalDateTime.now()
-        );
+                command.fromWarehouseCode(), fromName,
+                command.toWarehouseCode(), toName,
+                command.priority(), command.note(), lines,
+                user.employeeNumber(), LocalDateTime.now());
 
         SalesOrder saved = repository.save(so);
         eventPublisher.publishRequested(saved.soNumber());
@@ -111,7 +103,6 @@ public class SalesOrderService implements SalesOrderUseCase {
         SalesOrder so = load(command.soNumber());
         authorizeOwnerWrite(so, command.currentUser());
 
-        // 라인 교체가 있으면 스냅샷 재조회. 없으면 null 전달(도메인이 유지).
         List<SalesOrderLine> newLines = command.hasLineReplacement()
                 ? toDomainLines(command.lines())
                 : null;
@@ -151,7 +142,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         so.reject(currentUser.employeeNumber(), reason, LocalDateTime.now()); // 사유 필수 검증은 도메인이
         repository.save(so);
         eventPublisher.publishRejected(so.soNumber());
-        return statusChange(so, currentUser.employeeNumber(), so.rejectedAt(), so.rejectReason());
+        return statusChange(so, currentUser.employeeNumber(), so.rejectedAt(), so.rejectedReason());
     }
 
     @Override
@@ -163,9 +154,8 @@ public class SalesOrderService implements SalesOrderUseCase {
         repository.save(so);
 
         // 유일하게 실재고가 움직이는 지점. source=HQ(to) -> destination=지점(from).
-        // 주의(운영): 아래 inventory 호출은 외부 컨텍스트라 로컬 트랜잭션 롤백으로 보상되지 않는다.
-        //            실제로는 트랜잭셔널 아웃박스/사가로 정합성을 보장해야 한다.
-        //            지금은 동기 호출 + 같은 트랜잭션 안에서 "이동 실패 시 수령도 롤백" 정도로 둔다.
+        // 정합성: Inventory 호출 실패 시 이 트랜잭션이 롤백되어 수령도 취소됨(p.198 호출측 트랜잭션 결속).
+        // 단 MSA(DB-per-service)라 진짜 분산 원자성은 Saga/Outbox(도전 B-03)로 보강해야 한다.
         List<StockTransferLine> transferLines = so.lines().stream()
                 .map(l -> new StockTransferLine(l.sku(), l.quantity()))
                 .toList();
@@ -184,7 +174,6 @@ public class SalesOrderService implements SalesOrderUseCase {
                 .orElseThrow(() -> new ApiException(ErrorCode.SALES_ORDER_NOT_FOUND));
     }
 
-    /** 조회 권한: 본사/관리자는 전체, 지점은 본인 창고만. */
     private void authorizeRead(SalesOrder so, CurrentUser user) {
         if (user.isHq()) return;
         if (!so.ownedByWarehouse(user.warehouseCode())) {
@@ -192,7 +181,6 @@ public class SalesOrderService implements SalesOrderUseCase {
         }
     }
 
-    /** 소유자 쓰기 권한(수정/취소/수령): 관리자 또는 본인 창고 지점 사용자. */
     private void authorizeOwnerWrite(SalesOrder so, CurrentUser user) {
         if (user.isAdmin()) return;
         if (!(user.isBranchUser() && so.ownedByWarehouse(user.warehouseCode()))) {
@@ -200,14 +188,12 @@ public class SalesOrderService implements SalesOrderUseCase {
         }
     }
 
-    /** 승인/반려 권한: 본사 관리자 또는 관리자만. */
     private void authorizeDecision(CurrentUser user) {
         if (!user.canDecide()) {
             throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_ROLE);
         }
     }
 
-    /** 라인 커맨드 -> 스냅샷이 채워진 도메인 라인. 스냅샷은 CatalogPort 로 조회. */
     private List<SalesOrderLine> toDomainLines(List<SalesOrderLineCommand> lineCommands) {
         List<SalesOrderLine> lines = new ArrayList<>();
         int lineNo = 1;
@@ -229,25 +215,23 @@ public class SalesOrderService implements SalesOrderUseCase {
                 .toList();
         return new SalesOrderResult(
                 so.soNumber(),
-                so.fromWarehouseCode(), catalogPort.warehouseName(so.fromWarehouseCode()),
-                so.toWarehouseCode(), catalogPort.warehouseName(so.toWarehouseCode()),
+                so.fromWarehouseCode(), so.fromWarehouseName(),
+                so.toWarehouseCode(), so.toWarehouseName(),
                 so.status(), so.priority(),
                 so.requestedBy(), so.approvedBy(), so.receivedBy(), so.canceledBy(),
                 so.requestedAt(), so.approvedAt(), so.receivedAt(), so.canceledAt(),
-                so.rejectReason(), so.totalAmount(), so.note(),
-                lines
-        );
+                so.rejectedReason(), so.totalAmount(), so.note(),
+                lines);
     }
 
     private SalesOrderSummaryResult toSummary(SalesOrder so) {
         return new SalesOrderSummaryResult(
                 so.soNumber(),
-                so.fromWarehouseCode(), catalogPort.warehouseName(so.fromWarehouseCode()),
-                so.toWarehouseCode(), catalogPort.warehouseName(so.toWarehouseCode()),
+                so.fromWarehouseCode(), so.fromWarehouseName(),
+                so.toWarehouseCode(), so.toWarehouseName(),
                 so.status(), so.priority(),
                 so.requestedBy(), so.approvedBy(), so.receivedBy(), so.canceledBy(),
                 so.requestedAt(), so.approvedAt(), so.receivedAt(), so.canceledAt(),
-                so.totalAmount(), so.note()
-        );
+                so.totalAmount(), so.note());
     }
 }

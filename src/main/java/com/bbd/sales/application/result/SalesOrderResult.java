@@ -24,7 +24,7 @@ public record SalesOrderResult(
         LocalDateTime approvedAt,
         LocalDateTime receivedAt,
         LocalDateTime canceledAt,
-        String rejectReason,
+        String rejectedReason,
         BigDecimal totalAmount,
         String note,
         List<SalesOrderLineResult> lines
