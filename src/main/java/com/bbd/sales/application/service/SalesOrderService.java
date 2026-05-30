@@ -45,9 +45,14 @@ public class SalesOrderService implements SalesOrderUseCase {
     @Transactional(readOnly = true)
     public SalesOrderPageResult<SalesOrderSummaryResult> search(SearchSalesOrderQuery query) {
         // 지점 사용자는 본인 창고만. 본사/관리자는 필터 그대로.
+        // 비-HQ인데 warehouseCode가 없으면(헤더 누락 등) fromScope가 null로 풀려 전체가 노출되므로 차단.
         String fromScope = query.fromWarehouseCode();
         if (!query.currentUser().isHq()) {
-            fromScope = query.currentUser().warehouseCode();
+            String warehouseCode = query.currentUser().warehouseCode();
+            if (warehouseCode == null || warehouseCode.isBlank()) {
+                throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
+            }
+            fromScope = warehouseCode;   // 본인 창고로 강제(전달된 필터 무시)
         }
 
         LocalDateTime from = query.startDate() != null ? query.startDate().atStartOfDay() : null;
@@ -176,6 +181,17 @@ public class SalesOrderService implements SalesOrderUseCase {
                 .orElseThrow(() -> new ApiException(ErrorCode.SALES_ORDER_NOT_FOUND));
     }
 
+    /*
+     * 권한 매트릭스 (의도된 설계 — 규칙 변경 시 이 표도 함께 갱신):
+     *   생성        : 본인창고 지점 사용자, ADMIN
+     *   조회        : HQ(전체), 지점(본인창고만), ADMIN
+     *   수정/취소   : 본인창고 지점 사용자, ADMIN   (HQ는 타지점 SO 내용에 개입하지 않음)
+     *   승인/반려   : HQ_MANAGER, ADMIN
+     *   수령(도착)  : 본인창고 지점 사용자, ADMIN
+     *
+     * 참고: PDF 스펙의 HQ_STAFF '출고(SHIP)처리'는 팀이 SHIPPED 단계를 제거하고
+     *       RECEIVED 전이로 통합했기에 별도 ship 권한이 없다(도착확인=지점 몫).
+     */
     private void authorizeRead(SalesOrder so, CurrentUser user) {
         if (user.isHq()) return;
         if (!so.ownedByWarehouse(user.warehouseCode())) {
