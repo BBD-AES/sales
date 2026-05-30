@@ -12,6 +12,8 @@ import java.util.List;
  * 헥사고날의 가장 안쪽: 프레임워크/JPA/스프링 의존이 0 이다.
  *  - @Entity 도, @Service 도, ApiException 도 여기엔 없다 -> 스프링 없이 순수 단위테스트 가능.
  *  - JPA 영속화는 adapter.out.persistence 의 별도 JpaEntity + 매퍼가 담당(도메인-영속 모델 분리).
+ *  - @Transactional 도 붙이지 않는다. 트랜잭션 경계는 application.service.SalesOrderService 가 잡고,
+ *    이 객체는 그 트랜잭션 안에서 상태 전이 규칙만 수행하는 순수 도메인 모델이다.
  *
  * 창고 방향(시드 데이터 SO-2026-0001 확인): from=요청 지점(목적지), to=HQ(출발지).
  *  => 수령 시 재고 이동 source=to(HQ) -> destination=from(지점).
@@ -110,7 +112,20 @@ public class SalesOrder {
         return so;
     }
 
-    // --------------------- 상태 전이 (업무 규칙) ---------------------
+    // ─────────────────────── 상태 전이 (업무 규칙) ───────────────────────
+    //
+    // Q. 왜 이 메서드들엔 @Transactional 을 안 붙이나?
+    //  1) 여기선 DB 를 건드리지 않는다. 메모리 위 필드(status 등)만 바꾼다.
+    //     커밋/롤백할 대상이 없으니 트랜잭션이라는 개념 자체가 필요 없다.
+    //  2) 트랜잭션 경계는 application 의 SalesOrderService(@Transactional)가 소유한다.
+    //     이 메서드는 이미 열려 있는 그 트랜잭션 '안에서' 도는 한 스텝일 뿐이고,
+    //     실제 DB 반영(UPDATE)은 서비스 트랜잭션이 커밋될 때 Hibernate 가 flush 한다.
+    //  3) 애초에 @Transactional 은 스프링 빈(프록시)에만 동작한다. SalesOrder 는
+    //     new / reconstitute 로 만드는 평범한 객체(빈 아님)라 붙여도 무시된다.
+    //     게다가 순수 도메인에 스프링을 끌어들이면 헥사고날 경계가 깨진다.
+    //
+    // 정리: 도메인은 "무엇이 올바른 상태 변화인가"만 책임지고,
+    //       "그 변화를 언제 DB 에 원자적으로 확정하나"는 서비스의 @Transactional 이 책임진다.
 
     /** 내용 수정. REQUESTED 에서만. newLines == null 이면 라인 유지, 아니면 전체 교체. */
     public void updateContents(SalesOrderPriority priority, String note, List<SalesOrderLine> newLines) {
