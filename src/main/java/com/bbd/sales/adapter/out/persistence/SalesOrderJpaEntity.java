@@ -74,6 +74,13 @@ public class SalesOrderJpaEntity {
      *    자동 UPDATE/INSERT/DELETE 를 만든다. cascade=ALL + orphanRemoval=true 라서
      *    리스트에서 빠진 기존 라인은 DELETE, 새로 add 된 라인은 INSERT 가 자동 발생.
      *    => 라인마다 repository.save() 를 부를 필요가 없다. 양방향 참조(set)만 맞춰주면 끝.
+     *
+     * Q. 왜 @Transactional 을 여기 붙이지 않는가?
+     * A. 트랜잭션 경계는 엔티티가 아니라 application service 가 잡는다. 이 메서드는
+     *    DB 작업을 직접 시작하는 메서드가 아니라, 이미 열린 트랜잭션 안에서 관리 중인
+     *    엔티티의 컬렉션 상태만 바꾸는 도메인/영속 모델 보조 메서드다. 엔티티에
+     *    @Transactional 을 붙이면 영속 모델이 Spring 트랜잭션에 의존하게 되어 경계가
+     *    흐려진다. 호출자는 @Transactional 메서드 안에서 이 메서드를 호출해야 한다.
      */
     public void replaceLines(List<SalesOrderLineJpaEntity> newLines) {
         this.lines.clear();

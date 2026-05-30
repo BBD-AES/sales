@@ -29,6 +29,8 @@ import java.util.List;
  */
 @Service
 @RequiredArgsConstructor
+// 쓰기 유스케이스(create/update/cancel/approve/reject/receive)는 클래스 레벨 트랜잭션을 공유한다.
+// 조회 메서드만 아래에서 readOnly=true로 좁혀 덮어쓴다.
 @Transactional
 public class SalesOrderService implements SalesOrderUseCase {
 
