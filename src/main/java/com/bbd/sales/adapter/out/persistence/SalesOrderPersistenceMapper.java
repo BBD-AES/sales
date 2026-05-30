@@ -7,14 +7,10 @@ import org.springframework.stereotype.Component;
 import java.util.Comparator;
 import java.util.List;
 
-/**
- * 도메인 <-> JPA 엔티티 변환. 두 모델을 분리했기에 필요한 '경계 번역기'.
- * 도메인은 SalesOrder.reconstitute(...) 로 무검증 복원한다(이미 유효한 DB 상태이므로).
- */
+/** 도메인 <-> JPA 엔티티 변환(경계 번역기). 복원은 SalesOrder.reconstitute 로 무검증 재구성. */
 @Component
 public class SalesOrderPersistenceMapper {
 
-    /** 신규 도메인 -> 새 엔티티. */
     public SalesOrderJpaEntity toNewEntity(SalesOrder so) {
         SalesOrderJpaEntity entity = new SalesOrderJpaEntity();
         entity.setSoNumber(so.soNumber());
@@ -22,14 +18,15 @@ public class SalesOrderPersistenceMapper {
         return entity;
     }
 
-    /** 기존 엔티티에 도메인 상태 반영(업데이트 경로). soNumber/version 은 건드리지 않는다. */
     public void applyTo(SalesOrderJpaEntity entity, SalesOrder so) {
         applyMutable(entity, so);
     }
 
     private void applyMutable(SalesOrderJpaEntity entity, SalesOrder so) {
         entity.setFromWarehouseCode(so.fromWarehouseCode());
+        entity.setFromWarehouseName(so.fromWarehouseName());
         entity.setToWarehouseCode(so.toWarehouseCode());
+        entity.setToWarehouseName(so.toWarehouseName());
         entity.setStatus(so.status());
         entity.setPriority(so.priority());
         entity.setNote(so.note());
@@ -38,7 +35,7 @@ public class SalesOrderPersistenceMapper {
         entity.setRejectedBy(so.rejectedBy());
         entity.setReceivedBy(so.receivedBy());
         entity.setCanceledBy(so.canceledBy());
-        entity.setRejectReason(so.rejectReason());
+        entity.setRejectedReason(so.rejectedReason());
         entity.setRequestedAt(so.requestedAt());
         entity.setApprovedAt(so.approvedAt());
         entity.setRejectedAt(so.rejectedAt());
@@ -52,7 +49,6 @@ public class SalesOrderPersistenceMapper {
         entity.replaceLines(lineEntities);
     }
 
-    /** 엔티티 -> 도메인. */
     public SalesOrder toDomain(SalesOrderJpaEntity e) {
         List<SalesOrderLine> lines = e.getLines().stream()
                 .sorted(Comparator.comparingInt(SalesOrderLineJpaEntity::getLineNo))
@@ -61,12 +57,13 @@ public class SalesOrderPersistenceMapper {
                 .toList();
 
         return SalesOrder.reconstitute(
-                e.getSoNumber(), e.getFromWarehouseCode(), e.getToWarehouseCode(),
+                e.getSoNumber(),
+                e.getFromWarehouseCode(), e.getFromWarehouseName(),
+                e.getToWarehouseCode(), e.getToWarehouseName(),
                 e.getStatus(), e.getPriority(), e.getNote(), lines,
                 e.getRequestedBy(), e.getApprovedBy(), e.getRejectedBy(),
-                e.getReceivedBy(), e.getCanceledBy(), e.getRejectReason(),
+                e.getReceivedBy(), e.getCanceledBy(), e.getRejectedReason(),
                 e.getRequestedAt(), e.getApprovedAt(), e.getRejectedAt(),
-                e.getReceivedAt(), e.getCanceledAt()
-        );
+                e.getReceivedAt(), e.getCanceledAt());
     }
 }
