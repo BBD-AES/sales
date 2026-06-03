@@ -60,7 +60,7 @@ public class SalesOrderService implements SalesOrderUseCase {
 
         SalesOrderSearchCriteria criteria = new SalesOrderSearchCriteria(
                 query.status(), query.priority(), fromScope,
-                query.toWarehouseCode(), query.requestedBy(), from, to);
+                query.requestedBy(), from, to);
 
         SalesOrderPage page = repository.search(criteria, query.page(), query.size());
         List<SalesOrderSummaryResult> items = page.content().stream().map(this::toSummary).toList();
@@ -90,13 +90,12 @@ public class SalesOrderService implements SalesOrderUseCase {
         String soNumber = repository.nextSoNumber();
 
         // 창고명 스냅샷: 생성 시점에 한 번만 조회해 박는다(이후 읽기는 원격 호출 0).
+        // 출발지(source)는 sales 가 저장하지 않음 -> HQ/충족 단계가 결정.
         String fromName = catalogPort.warehouseName(command.fromWarehouseCode());
-        String toName = catalogPort.warehouseName(command.toWarehouseCode());
 
         SalesOrder so = SalesOrder.request(
                 soNumber,
                 command.fromWarehouseCode(), fromName,
-                command.toWarehouseCode(), toName,
                 command.priority(), command.note(), lines,
                 user.employeeNumber(), LocalDateTime.now());
 
@@ -171,14 +170,13 @@ public class SalesOrderService implements SalesOrderUseCase {
         so.receive(currentUser.employeeNumber(), LocalDateTime.now()); // APPROVED 검증은 도메인이
         repository.save(so);
 
-        // 유일하게 실재고가 움직이는 지점. source=HQ(to) -> destination=지점(from).
-        // 정합성: Inventory 호출 실패 시 이 트랜잭션이 롤백되어 수령도 취소됨(p.198 호출측 트랜잭션 결속).
-        // 단 MSA(DB-per-service)라 진짜 분산 원자성은 Saga/Outbox(도전 B-03)로 보강해야 한다.
+        // 유일하게 실재고가 움직이는 지점. destination=지점(from); source 는 Inventory 가 soNumber 로 해석.
+        // 정합성: Inventory 호출 실패 시 이 트랜잭션이 롤백되어 수령도 취소됨(동기 호출 결속).
         List<StockTransferLine> transferLines = so.lines().stream()
                 .map(l -> new StockTransferLine(l.sku(), l.quantity()))
                 .toList();
         inventoryPort.transferForSalesOrderReceive(
-                so.soNumber(), so.toWarehouseCode(), so.fromWarehouseCode(),
+                so.soNumber(), so.fromWarehouseCode(),
                 currentUser.employeeNumber(), transferLines);
 
         eventPublisher.publishReceived(so.soNumber());
@@ -258,7 +256,6 @@ public class SalesOrderService implements SalesOrderUseCase {
         return new SalesOrderResult(
                 so.soNumber(),
                 so.fromWarehouseCode(), so.fromWarehouseName(),
-                so.toWarehouseCode(), so.toWarehouseName(),
                 so.status(), so.priority(),
                 so.requestedBy(), so.approvedBy(), so.receivedBy(), so.canceledBy(),
                 so.requestedAt(), so.approvedAt(), so.receivedAt(), so.canceledAt(),
@@ -270,7 +267,6 @@ public class SalesOrderService implements SalesOrderUseCase {
         return new SalesOrderSummaryResult(
                 so.soNumber(),
                 so.fromWarehouseCode(), so.fromWarehouseName(),
-                so.toWarehouseCode(), so.toWarehouseName(),
                 so.status(), so.priority(),
                 so.requestedBy(), so.approvedBy(), so.receivedBy(), so.canceledBy(),
                 so.requestedAt(), so.approvedAt(), so.receivedAt(), so.canceledAt(),

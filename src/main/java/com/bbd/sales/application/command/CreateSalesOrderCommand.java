@@ -11,7 +11,6 @@ import java.util.List;
  */
 public record CreateSalesOrderCommand(
         String fromWarehouseCode,
-        String toWarehouseCode,
         SalesOrderPriority priority,
         String note,
         List<SalesOrderLineCommand> lines,

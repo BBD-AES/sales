@@ -12,8 +12,6 @@ public record SalesOrderDetailResponse(
         String soNumber,
         String fromWarehouseCode,
         String fromWarehouseName,
-        String toWarehouseCode,
-        String toWarehouseName,
         SalesOrderStatus status,
         SalesOrderPriority priority,
         String requestedBy,

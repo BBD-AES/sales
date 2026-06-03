@@ -17,12 +17,11 @@ public class InventoryStubAdapter implements InventoryPort {
 
     @Override
     public void transferForSalesOrderReceive(String soNumber,
-                                             String sourceWarehouseCode,
                                              String destinationWarehouseCode,
                                              String issuerId,
                                              List<StockTransferLine> lines) {
-        log.info("[InventoryStub] 재고 이동 요청 so={}, {} -> {}, issuer={}, lines={}",
-                soNumber, sourceWarehouseCode, destinationWarehouseCode, issuerId, lines);
-        // 실제 구현 전까지는 성공으로 간주(no-op).
+        log.info("[InventoryStub] 재고 이동 요청 so={}, -> {}, issuer={}, lines={}",
+                soNumber, destinationWarehouseCode, issuerId, lines);
+        // 실제 구현 전까지는 성공으로 간주(no-op). source 는 추후 할당 기록으로 해석.
     }
 }
