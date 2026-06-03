@@ -27,18 +27,17 @@ public class SalesOrderWebMapper {
 
     public SearchSalesOrderQuery toSearchQuery(
             SalesOrderStatus status, SalesOrderPriority priority,
-            String fromWarehouseCode, String toWarehouseCode, String requestedBy,
+            String fromWarehouseCode, String requestedBy,
             LocalDate startDate, LocalDate endDate,
             int page, int size, CurrentUser currentUser) {
         return new SearchSalesOrderQuery(
-                status, priority, fromWarehouseCode, toWarehouseCode, requestedBy,
+                status, priority, fromWarehouseCode, requestedBy,
                 startDate, endDate, page, size, currentUser);
     }
 
     public CreateSalesOrderCommand toCreateCommand(CreateSalesOrderRequest req, CurrentUser currentUser) {
         return new CreateSalesOrderCommand(
                 req.fromWarehouseCode(),
-                req.toWarehouseCode(),
                 req.priority(),
                 req.note(),
                 toLineCommands(req.lines()),
@@ -77,7 +76,6 @@ public class SalesOrderWebMapper {
         return new SalesOrderDetailResponse(
                 r.soNumber(),
                 r.fromWarehouseCode(), r.fromWarehouseName(),
-                r.toWarehouseCode(), r.toWarehouseName(),
                 r.status(), r.priority(),
                 r.requestedBy(), r.approvedBy(), r.receivedBy(), r.canceledBy(),
                 r.requestedAt(), r.approvedAt(), r.receivedAt(), r.canceledAt(),
@@ -94,7 +92,6 @@ public class SalesOrderWebMapper {
         return new SalesOrderSummaryResponse(
                 r.soNumber(),
                 r.fromWarehouseCode(), r.fromWarehouseName(),
-                r.toWarehouseCode(), r.toWarehouseName(),
                 r.status(), r.priority(),
                 r.requestedBy(), r.approvedBy(), r.receivedBy(), r.canceledBy(),
                 r.requestedAt(), r.approvedAt(), r.receivedAt(), r.canceledAt(),

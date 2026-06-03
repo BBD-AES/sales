@@ -13,7 +13,6 @@ public record SalesOrderSearchCriteria(
         SalesOrderStatus status,
         SalesOrderPriority priority,
         String fromWarehouseCode,
-        String toWarehouseCode,
         String requestedBy,
         LocalDateTime from,
         LocalDateTime to
