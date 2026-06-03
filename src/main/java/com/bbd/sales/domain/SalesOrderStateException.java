@@ -16,6 +16,7 @@ public class SalesOrderStateException extends RuntimeException {
         NOT_CANCELABLE,          // REQUESTED/SUBMITTED 가 아니라서 취소 불가
         NOT_DECIDABLE,           // SUBMITTED 가 아니라서 HQ 승인/반려 불가
         NOT_RECEIVABLE,          // IN_FULFILLMENT 가 아니라서 수령 불가
+        NOT_FULFILLABLE,         // BACKORDERED 가 아니라서 충족 처리 불가
         REJECT_REASON_REQUIRED   // 반려 사유 누락
     }
 

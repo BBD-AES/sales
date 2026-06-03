@@ -32,6 +32,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             case NOT_CANCELABLE -> ErrorCode.SALES_ORDER_NOT_CANCELABLE;
             case NOT_DECIDABLE -> ErrorCode.SALES_ORDER_NOT_DECIDABLE;
             case NOT_RECEIVABLE -> ErrorCode.SALES_ORDER_NOT_RECEIVABLE;
+            case NOT_FULFILLABLE -> ErrorCode.SALES_ORDER_NOT_FULFILLABLE;
             case REJECT_REASON_REQUIRED -> ErrorCode.SALES_ORDER_REJECT_REASON_REQUIRED;
         };
         ApiException mapped = new ApiException(code);
