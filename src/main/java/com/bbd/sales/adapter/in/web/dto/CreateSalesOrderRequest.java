@@ -11,7 +11,6 @@ import java.util.List;
 /** POST 생성 요청 body. */
 public record CreateSalesOrderRequest(
         @NotBlank String fromWarehouseCode,
-        @NotBlank String toWarehouseCode,
         @NotNull SalesOrderPriority priority,
         String note,
         @NotEmpty List<@Valid SalesOrderLineRequest> lines

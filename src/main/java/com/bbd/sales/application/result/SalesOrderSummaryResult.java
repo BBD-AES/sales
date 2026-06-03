@@ -11,8 +11,6 @@ public record SalesOrderSummaryResult(
         String soNumber,
         String fromWarehouseCode,
         String fromWarehouseName,
-        String toWarehouseCode,
-        String toWarehouseName,
         SalesOrderStatus status,
         SalesOrderPriority priority,
         String requestedBy,
