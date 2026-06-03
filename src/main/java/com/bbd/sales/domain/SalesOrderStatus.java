@@ -49,6 +49,11 @@ public enum SalesOrderStatus {
         return this == SUBMITTED || this == BACKORDERED;
     }
 
+    /** 백오더(PO 대기) 상태인가. */
+    public boolean isBackordered() {
+        return this == BACKORDERED;
+    }
+
     /** 수령(실재고 이동)이 가능한 상태인가. */
     public boolean isReceivable() {
         return this == IN_FULFILLMENT;

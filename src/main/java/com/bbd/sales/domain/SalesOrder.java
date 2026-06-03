@@ -185,6 +185,14 @@ public class SalesOrder {
         this.approvedAt = now;
     }
 
+    /** PO 입고 후 백오더 해소. BACKORDERED -> IN_FULFILLMENT. 승인자는 backorder 시점 값 유지. */
+    public void fulfillFromBackorder(LocalDateTime now) {
+        if (!status.isBackordered()) {
+            throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_FULFILLABLE);
+        }
+        this.status = SalesOrderStatus.IN_FULFILLMENT;
+    }
+
     /** 반려. SUBMITTED 에서만(HQ 결정), 사유 필수. */
     public void reject(String actor, String reason, LocalDateTime now) {
         if (!status.canHqDecide()) {
