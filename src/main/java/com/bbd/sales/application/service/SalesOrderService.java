@@ -39,6 +39,7 @@ public class SalesOrderService implements SalesOrderUseCase {
     private final InventoryPort inventoryPort;
     private final SalesOrderEventPublisher eventPublisher;
     private final CatalogPort catalogPort;
+    private final ProcurementPort procurementPort;
 
     // ============================ 조회 ============================
 
@@ -163,8 +164,30 @@ public class SalesOrderService implements SalesOrderUseCase {
         } else {
             so.backorder(currentUser.employeeNumber(), now);     // 재고 부족 -> BACKORDERED(PO 대기)
             repository.save(so);
+            procurementPort.raisePurchaseOrder(so.soNumber(), so.fromWarehouseCode(), reserveLines); // 부족분 발주
             eventPublisher.publishBackordered(so.soNumber());
         }
+        return statusChange(so, currentUser.employeeNumber(), so.approvedAt(), null);
+    }
+
+    @Override
+    public SalesOrderStatusChangeResult fulfillBackorder(String soNumber, CurrentUser currentUser) {
+        SalesOrder so = load(soNumber);
+        authorizeDecision(currentUser);
+        requireBackordered(so); // 외부 예약 호출 전 상태 선검증
+
+        // PO 입고분으로 재예약 시도(동기). 성공 시에만 충족 진행으로 전환.
+        List<StockTransferLine> reserveLines = so.lines().stream()
+                .map(l -> new StockTransferLine(l.sku(), l.quantity()))
+                .toList();
+        boolean reserved = inventoryPort.reserve(so.soNumber(), so.fromWarehouseCode(), reserveLines);
+
+        if (reserved) {
+            so.fulfillFromBackorder(LocalDateTime.now());  // BACKORDERED -> IN_FULFILLMENT
+            repository.save(so);
+            eventPublisher.publishFulfilling(so.soNumber());
+        }
+        // 아직 입고 전이면 BACKORDERED 유지(멱등 재시도 가능).
         return statusChange(so, currentUser.employeeNumber(), so.approvedAt(), null);
     }
 
@@ -210,6 +233,12 @@ public class SalesOrderService implements SalesOrderUseCase {
     private void requireHqDecidable(SalesOrder so) {
         if (!so.status().canHqDecide()) {
             throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_DECIDABLE);
+        }
+    }
+
+    private void requireBackordered(SalesOrder so) {
+        if (!so.status().isBackordered()) {
+            throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_FULFILLABLE);
         }
     }
 

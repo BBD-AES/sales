@@ -29,8 +29,11 @@ public interface SalesOrderUseCase {
 
     SalesOrderStatusChangeResult cancel(String soNumber, CurrentUser currentUser);
 
-    /** HQ 승인(SUBMITTED -> IN_FULFILLMENT). */
+    /** HQ 승인(SUBMITTED -> IN_FULFILLMENT, 재고 부족 시 BACKORDERED). */
     SalesOrderStatusChangeResult approve(String soNumber, CurrentUser currentUser);
+
+    /** PO 입고 후 백오더 해소(BACKORDERED -> IN_FULFILLMENT). */
+    SalesOrderStatusChangeResult fulfillBackorder(String soNumber, CurrentUser currentUser);
 
     SalesOrderStatusChangeResult reject(String soNumber, String reason, CurrentUser currentUser);
 

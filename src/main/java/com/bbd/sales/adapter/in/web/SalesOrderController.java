@@ -86,6 +86,11 @@ public class SalesOrderController {
         return webMapper.toStatusChangeResponse(salesOrderUseCase.approve(soNumber, currentUser));
     }
 
+    @PatchMapping("/{soNumber}/fulfill-backorder")
+    public SalesOrderStatusChangeResponse fulfillBackorder(@PathVariable String soNumber, CurrentUser currentUser) {
+        return webMapper.toStatusChangeResponse(salesOrderUseCase.fulfillBackorder(soNumber, currentUser));
+    }
+
     @PatchMapping("/{soNumber}/reject")
     public SalesOrderStatusChangeResponse reject(
             @PathVariable String soNumber,
