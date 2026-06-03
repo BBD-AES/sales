@@ -11,6 +11,7 @@ public interface SalesOrderEventPublisher {
     void publishSubmitted(String soNumber);
     void publishCanceled(String soNumber);
     void publishFulfilling(String soNumber);
+    void publishBackordered(String soNumber);
     void publishRejected(String soNumber);
     void publishReceived(String soNumber);
 }

@@ -17,6 +17,7 @@ public class LoggingSalesOrderEventPublisher implements SalesOrderEventPublisher
     @Override public void publishSubmitted(String soNumber) { log.info("[event] SalesOrderSubmitted {}", soNumber); }
     @Override public void publishCanceled(String soNumber)  { log.info("[event] SalesOrderCanceled {}", soNumber); }
     @Override public void publishFulfilling(String soNumber){ log.info("[event] SalesOrderFulfilling {}", soNumber); }
+    @Override public void publishBackordered(String soNumber){ log.info("[event] SalesOrderBackordered {}", soNumber); }
     @Override public void publishRejected(String soNumber)  { log.info("[event] SalesOrderRejected {}", soNumber); }
     @Override public void publishReceived(String soNumber)  { log.info("[event] SalesOrderReceived {}", soNumber); }
 }
