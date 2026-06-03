@@ -72,6 +72,11 @@ public class SalesOrderController {
                 salesOrderUseCase.update(webMapper.toUpdateCommand(soNumber, request, currentUser)));
     }
 
+    @PatchMapping("/{soNumber}/submit")
+    public SalesOrderStatusChangeResponse submit(@PathVariable String soNumber, CurrentUser currentUser) {
+        return webMapper.toStatusChangeResponse(salesOrderUseCase.submit(soNumber, currentUser));
+    }
+
     @PatchMapping("/{soNumber}/cancel")
     public SalesOrderStatusChangeResponse cancel(@PathVariable String soNumber, CurrentUser currentUser) {
         return webMapper.toStatusChangeResponse(salesOrderUseCase.cancel(soNumber, currentUser));

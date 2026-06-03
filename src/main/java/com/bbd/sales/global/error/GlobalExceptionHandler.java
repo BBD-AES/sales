@@ -27,9 +27,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(SalesOrderStateException.class)
     public ResponseEntity<ProblemDetail> handleSalesOrderState(SalesOrderStateException e) {
         ErrorCode code = switch (e.getViolation()) {
-            case NOT_EDITABLE, NOT_CANCELABLE -> ErrorCode.SALES_ORDER_REQUESTED_ONLY;
-            case NOT_DECIDABLE -> ErrorCode.SALES_ORDER_DECISION_REQUESTED_ONLY;
-            case NOT_RECEIVABLE -> ErrorCode.SALES_ORDER_APPROVED_ONLY;
+            case NOT_EDITABLE -> ErrorCode.SALES_ORDER_NOT_EDITABLE;
+            case NOT_SUBMITTABLE -> ErrorCode.SALES_ORDER_NOT_SUBMITTABLE;
+            case NOT_CANCELABLE -> ErrorCode.SALES_ORDER_NOT_CANCELABLE;
+            case NOT_DECIDABLE -> ErrorCode.SALES_ORDER_NOT_DECIDABLE;
+            case NOT_RECEIVABLE -> ErrorCode.SALES_ORDER_NOT_RECEIVABLE;
             case REJECT_REASON_REQUIRED -> ErrorCode.SALES_ORDER_REJECT_REASON_REQUIRED;
         };
         ApiException mapped = new ApiException(code);

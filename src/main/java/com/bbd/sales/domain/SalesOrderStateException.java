@@ -12,9 +12,10 @@ public class SalesOrderStateException extends RuntimeException {
 
     public enum Violation {
         NOT_EDITABLE,            // REQUESTED 가 아니라서 수정 불가
-        NOT_CANCELABLE,          // REQUESTED 가 아니라서 취소 불가
-        NOT_DECIDABLE,           // REQUESTED 가 아니라서 승인/반려 불가
-        NOT_RECEIVABLE,          // APPROVED 가 아니라서 수령 불가
+        NOT_SUBMITTABLE,         // REQUESTED 가 아니라서 HQ 제출 불가
+        NOT_CANCELABLE,          // REQUESTED/SUBMITTED 가 아니라서 취소 불가
+        NOT_DECIDABLE,           // SUBMITTED 가 아니라서 HQ 승인/반려 불가
+        NOT_RECEIVABLE,          // IN_FULFILLMENT 가 아니라서 수령 불가
         REJECT_REASON_REQUIRED   // 반려 사유 누락
     }
 
