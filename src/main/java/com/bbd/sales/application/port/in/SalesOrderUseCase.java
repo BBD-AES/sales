@@ -24,8 +24,12 @@ public interface SalesOrderUseCase {
 
     SalesOrderResult update(UpdateSalesOrderCommand command);
 
+    /** 지점 관리자가 HQ로 제출(REQUESTED -> SUBMITTED). */
+    SalesOrderStatusChangeResult submit(String soNumber, CurrentUser currentUser);
+
     SalesOrderStatusChangeResult cancel(String soNumber, CurrentUser currentUser);
 
+    /** HQ 승인(SUBMITTED -> IN_FULFILLMENT). */
     SalesOrderStatusChangeResult approve(String soNumber, CurrentUser currentUser);
 
     SalesOrderStatusChangeResult reject(String soNumber, String reason, CurrentUser currentUser);

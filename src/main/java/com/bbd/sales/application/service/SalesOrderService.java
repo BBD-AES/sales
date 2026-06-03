@@ -123,6 +123,17 @@ public class SalesOrderService implements SalesOrderUseCase {
     // ============================ 상태 전이 ============================
 
     @Override
+    public SalesOrderStatusChangeResult submit(String soNumber, CurrentUser currentUser) {
+        SalesOrder so = load(soNumber);
+        authorizeSubmit(so, currentUser);
+        LocalDateTime now = LocalDateTime.now();
+        so.submit(now);                          // REQUESTED 검증은 도메인이
+        repository.save(so);
+        eventPublisher.publishSubmitted(so.soNumber());
+        return statusChange(so, currentUser.employeeNumber(), now, null);
+    }
+
+    @Override
     public SalesOrderStatusChangeResult cancel(String soNumber, CurrentUser currentUser) {
         SalesOrder so = load(soNumber);
         authorizeOwnerWrite(so, currentUser);
@@ -136,9 +147,9 @@ public class SalesOrderService implements SalesOrderUseCase {
     public SalesOrderStatusChangeResult approve(String soNumber, CurrentUser currentUser) {
         SalesOrder so = load(soNumber);
         authorizeDecision(currentUser);
-        so.approve(currentUser.employeeNumber(), LocalDateTime.now());
+        so.approveByHq(currentUser.employeeNumber(), LocalDateTime.now()); // SUBMITTED 검증은 도메인이
         repository.save(so);
-        eventPublisher.publishApproved(so.soNumber());
+        eventPublisher.publishFulfilling(so.soNumber());
         return statusChange(so, currentUser.employeeNumber(), so.approvedAt(), null);
     }
 
@@ -185,9 +196,11 @@ public class SalesOrderService implements SalesOrderUseCase {
      * 권한 매트릭스 (의도된 설계 — 규칙 변경 시 이 표도 함께 갱신):
      *   생성        : 본인창고 지점 사용자, ADMIN
      *   조회        : HQ(전체), 지점(본인창고만), ADMIN
-     *   수정/취소   : 본인창고 지점 사용자, ADMIN   (HQ는 타지점 SO 내용에 개입하지 않음)
-     *   승인/반려   : HQ_MANAGER, ADMIN
-     *   수령(도착)  : 본인창고 지점 사용자, ADMIN
+     *   수정        : 본인창고 지점 사용자, ADMIN   (REQUESTED 에서만)
+     *   제출(->HQ)  : 본인창고 BRANCH_MANAGER, ADMIN  (REQUESTED -> SUBMITTED)
+     *   취소        : 본인창고 지점 사용자, ADMIN   (REQUESTED/SUBMITTED 까지)
+     *   승인/반려   : HQ_MANAGER, ADMIN            (SUBMITTED 에서)
+     *   수령(도착)  : 본인창고 지점 사용자, ADMIN   (IN_FULFILLMENT 에서)
      *
      * 참고: PDF 스펙의 HQ_STAFF '출고(SHIP)처리'는 팀이 SHIPPED 단계를 제거하고
      *       RECEIVED 전이로 통합했기에 별도 ship 권한이 없다(도착확인=지점 몫).
@@ -202,6 +215,17 @@ public class SalesOrderService implements SalesOrderUseCase {
     private void authorizeOwnerWrite(SalesOrder so, CurrentUser user) {
         if (user.isAdmin()) return;
         if (!(user.isBranchUser() && so.ownedByWarehouse(user.warehouseCode()))) {
+            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
+        }
+    }
+
+    /** 제출(HQ로 올림)은 본인 창고의 지점 관리자(또는 ADMIN). */
+    private void authorizeSubmit(SalesOrder so, CurrentUser user) {
+        if (user.isAdmin()) return;
+        if (!user.isBranchManager()) {
+            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_ROLE);
+        }
+        if (!so.ownedByWarehouse(user.warehouseCode())) {
             throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
         }
     }
