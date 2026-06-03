@@ -16,6 +16,12 @@ import java.util.List;
 public class InventoryStubAdapter implements InventoryPort {
 
     @Override
+    public boolean reserve(String soNumber, String destinationWarehouseCode, List<StockTransferLine> lines) {
+        log.info("[InventoryStub] 재고 예약 so={}, dest={}, lines={} -> 성공 간주", soNumber, destinationWarehouseCode, lines);
+        return true;   // 스텁: 항상 가용. 실제 어댑터는 원자적 조건부 차감 결과 반환(부족 시 false -> BACKORDERED).
+    }
+
+    @Override
     public void transferForSalesOrderReceive(String soNumber,
                                              String destinationWarehouseCode,
                                              String issuerId,

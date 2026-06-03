@@ -172,6 +172,19 @@ public class SalesOrder {
         this.approvedAt = now;
     }
 
+    /**
+     * HQ 승인했으나 재고 부족 -> 백오더. SUBMITTED 에서만. 승인자(HQ)는 기록한다.
+     * BACKORDERED -> IN_FULFILLMENT 전이(PO 입고 후)는 조달 연동 커밋에서 추가.
+     */
+    public void backorder(String actor, LocalDateTime now) {
+        if (!status.canHqDecide()) {
+            throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_DECIDABLE);
+        }
+        this.status = SalesOrderStatus.BACKORDERED;
+        this.approvedBy = actor;
+        this.approvedAt = now;
+    }
+
     /** 반려. SUBMITTED 에서만(HQ 결정), 사유 필수. */
     public void reject(String actor, String reason, LocalDateTime now) {
         if (!status.canHqDecide()) {

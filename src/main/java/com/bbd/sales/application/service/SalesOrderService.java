@@ -9,6 +9,7 @@ import com.bbd.sales.application.port.out.*;
 import com.bbd.sales.application.result.*;
 import com.bbd.sales.domain.SalesOrder;
 import com.bbd.sales.domain.SalesOrderLine;
+import com.bbd.sales.domain.SalesOrderStateException;
 import com.bbd.sales.global.error.ApiException;
 import com.bbd.sales.global.error.dto.ErrorCode;
 import com.bbd.sales.global.security.CurrentUser;
@@ -146,9 +147,24 @@ public class SalesOrderService implements SalesOrderUseCase {
     public SalesOrderStatusChangeResult approve(String soNumber, CurrentUser currentUser) {
         SalesOrder so = load(soNumber);
         authorizeDecision(currentUser);
-        so.approveByHq(currentUser.employeeNumber(), LocalDateTime.now()); // SUBMITTED 검증은 도메인이
-        repository.save(so);
-        eventPublisher.publishFulfilling(so.soNumber());
+        requireHqDecidable(so); // 외부 예약 호출 전 상태 선검증(예약 후 도메인 throw 시 고아 예약 방지)
+
+        // 동기 재고 예약: available 음수 방지는 Inventory 의 원자적 차감이 보장.
+        List<StockTransferLine> reserveLines = so.lines().stream()
+                .map(l -> new StockTransferLine(l.sku(), l.quantity()))
+                .toList();
+        boolean reserved = inventoryPort.reserve(so.soNumber(), so.fromWarehouseCode(), reserveLines);
+
+        LocalDateTime now = LocalDateTime.now();
+        if (reserved) {
+            so.approveByHq(currentUser.employeeNumber(), now);   // -> IN_FULFILLMENT
+            repository.save(so);
+            eventPublisher.publishFulfilling(so.soNumber());
+        } else {
+            so.backorder(currentUser.employeeNumber(), now);     // 재고 부족 -> BACKORDERED(PO 대기)
+            repository.save(so);
+            eventPublisher.publishBackordered(so.soNumber());
+        }
         return statusChange(so, currentUser.employeeNumber(), so.approvedAt(), null);
     }
 
@@ -188,6 +204,13 @@ public class SalesOrderService implements SalesOrderUseCase {
     private SalesOrder load(String soNumber) {
         return repository.findBySoNumber(soNumber)
                 .orElseThrow(() -> new ApiException(ErrorCode.SALES_ORDER_NOT_FOUND));
+    }
+
+    /** 외부 예약 호출 전 상태 선검증(예약 성공 후 도메인 전이가 throw 되어 고아 예약이 남는 것 방지). */
+    private void requireHqDecidable(SalesOrder so) {
+        if (!so.status().canHqDecide()) {
+            throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_DECIDABLE);
+        }
     }
 
     /*
