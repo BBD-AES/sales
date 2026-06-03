@@ -143,9 +143,20 @@ public class SalesOrder {
         }
     }
 
-    /** 취소. REQUESTED 에서만(요청자 본인 회수). */
+    /**
+     * HQ로 제출. REQUESTED 에서만(BRANCH_MANAGER 가 "실제로 HQ에 올린다" 결정).
+     * TODO(audit): 제출자(submittedBy/submittedAt) 기록 컬럼은 별도 커밋에서 추가.
+     */
+    public void submit(LocalDateTime now) {
+        if (!status.canSubmit()) {
+            throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_SUBMITTABLE);
+        }
+        this.status = SalesOrderStatus.SUBMITTED;
+    }
+
+    /** 취소. REQUESTED/SUBMITTED 에서만(요청자 본인 회수, HQ 손에 넘어가기 전까지). */
     public void cancel(String actor, LocalDateTime now) {
-        if (status != SalesOrderStatus.REQUESTED) {
+        if (!status.isCancelable()) {
             throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_CANCELABLE);
         }
         this.status = SalesOrderStatus.CANCELED;
@@ -153,19 +164,23 @@ public class SalesOrder {
         this.canceledAt = now;
     }
 
-    /** 승인. REQUESTED 에서만(HQ 결정). */
-    public void approve(String actor, LocalDateTime now) {
-        if (!status.isDecidable()) {
+    /**
+     * HQ 승인 -> 충족 진행. SUBMITTED 에서만.
+     * 재고 확인 결과에 따라 BACKORDERED 로 분기하는 로직은 InventoryPort 연동 커밋에서 추가한다.
+     * 현재는 낙관적으로 바로 IN_FULFILLMENT 로 둔다.
+     */
+    public void approveByHq(String actor, LocalDateTime now) {
+        if (!status.canHqDecide()) {
             throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_DECIDABLE);
         }
-        this.status = SalesOrderStatus.APPROVED;
+        this.status = SalesOrderStatus.IN_FULFILLMENT;
         this.approvedBy = actor;
         this.approvedAt = now;
     }
 
-    /** 반려. REQUESTED 에서만, 사유 필수. */
+    /** 반려. SUBMITTED 에서만(HQ 결정), 사유 필수. */
     public void reject(String actor, String reason, LocalDateTime now) {
-        if (!status.isDecidable()) {
+        if (!status.canHqDecide()) {
             throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_DECIDABLE);
         }
         if (reason == null || reason.isBlank()) {
@@ -177,7 +192,7 @@ public class SalesOrder {
         this.rejectedAt = now;
     }
 
-    /** 수령. APPROVED 에서만. 실재고 이동은 서비스가 포트로 처리, 여기선 상태만 닫는다. */
+    /** 수령. IN_FULFILLMENT 에서만. 실재고 이동은 서비스가 포트로 처리, 여기선 상태만 닫는다. */
     public void receive(String actor, LocalDateTime now) {
         if (!status.isReceivable()) {
             throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_RECEIVABLE);

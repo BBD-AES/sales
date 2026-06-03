@@ -29,4 +29,9 @@ public record CurrentUser(
     public boolean isBranchUser() {
         return role == RoleType.BRANCH_MANAGER || role == RoleType.BRANCH_STAFF;
     }
+
+    /** 지점 관리자(HQ 제출 결정 권한). */
+    public boolean isBranchManager() {
+        return role == RoleType.BRANCH_MANAGER;
+    }
 }
