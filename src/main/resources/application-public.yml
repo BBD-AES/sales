@@ -35,6 +35,8 @@ springdoc:
   swagger-ui:
     tags-sorter: alpha
     operations-sorter: alpha
+    url: /sales/v3/api-docs
+    config-url: /sales/v3/api-docs/swagger-config
 
 
 
