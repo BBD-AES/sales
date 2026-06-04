@@ -10,4 +10,5 @@ class SalesApplicationTests {
 	void contextLoads() {
 	}
 
+
 }
