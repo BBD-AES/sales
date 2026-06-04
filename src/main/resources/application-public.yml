@@ -15,6 +15,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+    defer-datasource-initialization: true   # data.sql 을 Hibernate 스키마 생성 이후 실행
     properties:
       hibernate:
         format_sql: true
@@ -22,6 +23,11 @@ spring:
         show_sql: false
         jdbc:
           time_zone: Asia/Seoul
+
+  sql:
+    init:
+      mode: always       # data.sql 시드 자동 로드(데모). 끄려면 never
+      encoding: UTF-8
 
 # Swagger
 springdoc:
