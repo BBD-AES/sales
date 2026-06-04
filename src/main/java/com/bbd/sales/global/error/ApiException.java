@@ -5,6 +5,8 @@ import lombok.Getter;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.ErrorResponseException;
 
+import java.time.OffsetDateTime;
+
 @Getter
 public class ApiException extends ErrorResponseException {
 
@@ -26,12 +28,14 @@ public class ApiException extends ErrorResponseException {
      * - status: HTTP 상태 코드
      * - title: 에러 코드처럼 짧게 식별 가능한 값(현재 규모에서는 ErrorCode의 code 필드를 그대로 사용)
      * - detail: 클라이언트에 보여줄 상세 메시지
+     * - timestamp: 에러 발생 시점 (실무에서 유용하게 쓰이는 정보를 직접 추가함)
      * - 추가적으로 필요한 필드가 있다면 setProperty로 넣어주면 된다. 예를 들어, 에러 발생 시점의 타임스탬프나 요청 ID 등을 넣을 수 있다.
      * ProblemDetail은 Jackson 직렬화 시 setProperty로 넣은 값을 최상위 JSON 필드로
      * 펼쳐주므로, 기존 ErrorResponse DTO의 code 필드도 유지하면서 표준 포맷을 쓸 수 있다.
      */
     private static ProblemDetail createBody(ErrorCode errorCode) {
         ProblemDetail body = ProblemDetail.forStatus(errorCode.getStatus());
+        body.setProperty("timestamp", OffsetDateTime.now());
         body.setTitle(errorCode.getCode());
         body.setDetail(errorCode.getMessage());
         return body;
