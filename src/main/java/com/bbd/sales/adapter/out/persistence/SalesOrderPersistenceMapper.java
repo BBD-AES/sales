@@ -41,8 +41,13 @@ public class SalesOrderPersistenceMapper {
         entity.setCanceledAt(so.canceledAt());
 
         List<SalesOrderLineJpaEntity> lineEntities = so.lines().stream()
-                .map(l -> new SalesOrderLineJpaEntity(
-                        l.lineNo(), l.sku(), l.nameSnapshot(), l.unitPriceSnapshot(), l.quantity()))
+                .map(l -> {
+                    SalesOrderLineJpaEntity le = new SalesOrderLineJpaEntity(
+                            l.lineNo(), l.sku(), l.nameSnapshot(), l.unitPriceSnapshot(), l.quantity());
+                    le.setReservedQuantity(l.reservedQuantity());
+                    le.setFulfillmentSource(l.fulfillmentSource());
+                    return le;
+                })
                 .toList();
         entity.replaceLines(lineEntities);
     }
@@ -50,8 +55,12 @@ public class SalesOrderPersistenceMapper {
     public SalesOrder toDomain(SalesOrderJpaEntity e) {
         List<SalesOrderLine> lines = e.getLines().stream()
                 .sorted(Comparator.comparingInt(SalesOrderLineJpaEntity::getLineNo))
-                .map(l -> new SalesOrderLine(
-                        l.getLineNo(), l.getSku(), l.getNameSnapshot(), l.getUnitPriceSnapshot(), l.getQuantity()))
+                .map(l -> {
+                    SalesOrderLine line = new SalesOrderLine(
+                            l.getLineNo(), l.getSku(), l.getNameSnapshot(), l.getUnitPriceSnapshot(), l.getQuantity());
+                    line.applyReservation(l.getReservedQuantity(), l.getFulfillmentSource());  // 저장 상태 복원
+                    return line;
+                })
                 .toList();
 
         return SalesOrder.reconstitute(
