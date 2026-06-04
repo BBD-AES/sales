@@ -164,7 +164,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         } else {
             so.backorder(currentUser.employeeNumber(), now);     // 재고 부족 -> BACKORDERED(PO 대기)
             repository.save(so);
-            procurementPort.raisePurchaseOrder(so.soNumber(), so.fromWarehouseCode(), reserveLines); // 부족분 발주
+            procurementPort.requestPurchase(so.soNumber(), so.fromWarehouseCode(), reserveLines); // 부족분 구매요청(PR)
             eventPublisher.publishBackordered(so.soNumber());
         }
         return statusChange(so, currentUser.employeeNumber(), so.approvedAt(), null);
