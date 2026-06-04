@@ -40,6 +40,7 @@ public class SalesOrderService implements SalesOrderUseCase {
     private final SalesOrderEventPublisher eventPublisher;
     private final CatalogPort catalogPort;
     private final ProcurementPort procurementPort;
+    private final ProductionPort productionPort;
 
     // ============================ 조회 ============================
 
@@ -150,21 +151,32 @@ public class SalesOrderService implements SalesOrderUseCase {
         authorizeDecision(currentUser);
         requireHqDecidable(so); // 외부 예약 호출 전 상태 선검증(예약 후 도메인 throw 시 고아 예약 방지)
 
-        // 동기 재고 예약: available 음수 방지는 Inventory 의 원자적 차감이 보장.
-        List<StockTransferLine> reserveLines = so.lines().stream()
-                .map(l -> new StockTransferLine(l.sku(), l.quantity()))
-                .toList();
-        boolean reserved = inventoryPort.reserve(so.soNumber(), so.fromWarehouseCode(), reserveLines);
+        // 1) 가용분 예약(동기, 부분예약). 음수 방지는 Inventory 의 원자적 차감이 보장.
+        List<ReservationResult> results = inventoryPort.reserve(
+                so.soNumber(), so.fromWarehouseCode(), toTransferLines(so));
+
+        // 2) 부족분을 품목 조달유형으로 분기: MAKE -> 생산요청, BUY -> 구매요청(PR).
+        List<StockTransferLine> toProduce = new ArrayList<>();
+        List<StockTransferLine> toPurchase = new ArrayList<>();
+        for (ReservationResult r : results) {
+            if (r.fullyReserved()) continue;
+            SourcingType type = catalogPort.resolveProduct(r.sku()).sourcingType();
+            (type == SourcingType.MAKE ? toProduce : toPurchase)
+                    .add(new StockTransferLine(r.sku(), r.shortfall()));
+        }
 
         LocalDateTime now = LocalDateTime.now();
-        if (reserved) {
-            so.approveByHq(currentUser.employeeNumber(), now);   // -> IN_FULFILLMENT
+        if (toProduce.isEmpty() && toPurchase.isEmpty()) {
+            so.approveByHq(currentUser.employeeNumber(), now);   // 전량 가용 -> IN_FULFILLMENT(출고)
             repository.save(so);
             eventPublisher.publishFulfilling(so.soNumber());
         } else {
-            so.backorder(currentUser.employeeNumber(), now);     // 재고 부족 -> BACKORDERED(PO 대기)
+            so.backorder(currentUser.employeeNumber(), now);     // 부족분 존재 -> BACKORDERED
             repository.save(so);
-            procurementPort.requestPurchase(so.soNumber(), so.fromWarehouseCode(), reserveLines); // 부족분 구매요청(PR)
+            if (!toPurchase.isEmpty())
+                procurementPort.requestPurchase(so.soNumber(), so.fromWarehouseCode(), toPurchase);
+            if (!toProduce.isEmpty())
+                productionPort.requestProduction(so.soNumber(), so.fromWarehouseCode(), toProduce);
             eventPublisher.publishBackordered(so.soNumber());
         }
         return statusChange(so, currentUser.employeeNumber(), so.approvedAt(), null);
@@ -176,13 +188,12 @@ public class SalesOrderService implements SalesOrderUseCase {
         authorizeDecision(currentUser);
         requireBackordered(so); // 외부 예약 호출 전 상태 선검증
 
-        // PO 입고분으로 재예약 시도(동기). 성공 시에만 충족 진행으로 전환.
-        List<StockTransferLine> reserveLines = so.lines().stream()
-                .map(l -> new StockTransferLine(l.sku(), l.quantity()))
-                .toList();
-        boolean reserved = inventoryPort.reserve(so.soNumber(), so.fromWarehouseCode(), reserveLines);
+        // 생산/구매 입고분으로 재예약 시도(동기). 전량 예약되면 충족 진행으로 전환.
+        List<ReservationResult> results = inventoryPort.reserve(
+                so.soNumber(), so.fromWarehouseCode(), toTransferLines(so));
+        boolean allReserved = results.stream().allMatch(ReservationResult::fullyReserved);
 
-        if (reserved) {
+        if (allReserved) {
             so.fulfillFromBackorder(LocalDateTime.now());  // BACKORDERED -> IN_FULFILLMENT
             repository.save(so);
             eventPublisher.publishFulfilling(so.soNumber());
@@ -211,12 +222,9 @@ public class SalesOrderService implements SalesOrderUseCase {
 
         // 유일하게 실재고가 움직이는 지점. destination=지점(from); source 는 Inventory 가 soNumber 로 해석.
         // 정합성: Inventory 호출 실패 시 이 트랜잭션이 롤백되어 수령도 취소됨(동기 호출 결속).
-        List<StockTransferLine> transferLines = so.lines().stream()
-                .map(l -> new StockTransferLine(l.sku(), l.quantity()))
-                .toList();
         inventoryPort.transferForSalesOrderReceive(
                 so.soNumber(), so.fromWarehouseCode(),
-                currentUser.employeeNumber(), transferLines);
+                currentUser.employeeNumber(), toTransferLines(so));
 
         eventPublisher.publishReceived(so.soNumber());
         return statusChange(so, currentUser.employeeNumber(), so.receivedAt(), null);
@@ -240,6 +248,13 @@ public class SalesOrderService implements SalesOrderUseCase {
         if (!so.status().isBackordered()) {
             throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_FULFILLABLE);
         }
+    }
+
+    /** 도메인 라인 -> Inventory 포트 전송 라인(sku/수량). */
+    private List<StockTransferLine> toTransferLines(SalesOrder so) {
+        return so.lines().stream()
+                .map(l -> new StockTransferLine(l.sku(), l.quantity()))
+                .toList();
     }
 
     /*
