@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 재고 아웃바운드 어댑터(임시 스텁).
@@ -16,13 +17,25 @@ import java.util.List;
 @Component
 public class InventoryStubAdapter implements InventoryPort {
 
+    /**
+     * [데모용] 가용재고. 여기 없는 SKU 는 전량 가용으로 간주(→ 출고).
+     * 실 Inventory 연동 시 이 맵은 사라지고, 원자적 조건부 차감 결과로 대체된다.
+     */
+    private static final Map<String, Integer> DEMO_AVAILABLE = Map.of(
+            "RLY-12V-30A-01", 0,   // 무재고 -> BUY 분기(구매요청) 시연
+            "CLT-DSK-MED-01", 1    // 부족   -> MAKE 분기(생산요청) 시연 (CatalogStub 에서 MAKE)
+    );
+
     @Override
     public List<ReservationResult> reserve(String soNumber, String destinationWarehouseCode, List<StockTransferLine> lines) {
-        log.info("[InventoryStub] 재고 예약 so={}, dest={}, lines={} -> 전량 가용 간주", soNumber, destinationWarehouseCode, lines);
-        // 스텁: 전량 예약 성공. 실제 어댑터는 원자적 조건부 차감으로 가용분만 예약하고 부족분을 반환.
-        return lines.stream()
-                .map(l -> new ReservationResult(l.sku(), l.quantity(), l.quantity()))
+        List<ReservationResult> results = lines.stream()
+                .map(l -> {
+                    int available = DEMO_AVAILABLE.getOrDefault(l.sku(), l.quantity()); // 미등록 SKU=전량 가용
+                    return new ReservationResult(l.sku(), l.quantity(), Math.min(l.quantity(), available));
+                })
                 .toList();
+        log.info("[InventoryStub] 재고 예약(데모) so={}, dest={}, 결과={}", soNumber, destinationWarehouseCode, results);
+        return results;
     }
 
     @Override
