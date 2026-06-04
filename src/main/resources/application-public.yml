@@ -23,6 +23,7 @@ spring:
         show_sql: false
         jdbc:
           time_zone: Asia/Seoul
+        default_schema: bbd
 
   sql:
     init:
