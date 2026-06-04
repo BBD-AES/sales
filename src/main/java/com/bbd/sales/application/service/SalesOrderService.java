@@ -194,12 +194,14 @@ public class SalesOrderService implements SalesOrderUseCase {
                 so.soNumber(), so.fromWarehouseCode(), toTransferLines(so));
         boolean allReserved = results.stream().allMatch(ReservationResult::fullyReserved);
 
+        LocalDateTime now = LocalDateTime.now();
         if (allReserved) {
-            so.fulfillFromBackorder(LocalDateTime.now());  // BACKORDERED -> IN_FULFILLMENT
+            so.fulfillFromBackorder(now);  // BACKORDERED -> IN_FULFILLMENT
             repository.save(so);
             eventPublisher.publishFulfilling(so.soNumber());
+            return statusChange(so, currentUser.employeeNumber(), now, null);  // 전이 시각으로
         }
-        // 아직 입고 전이면 BACKORDERED 유지(멱등 재시도 가능).
+        // 아직 입고 전이면 BACKORDERED 유지(멱등 재시도 가능). 상태 불변이니 승인 시각 유지.
         return statusChange(so, currentUser.employeeNumber(), so.approvedAt(), null);
     }
 
