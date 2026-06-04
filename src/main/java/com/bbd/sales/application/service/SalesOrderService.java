@@ -53,7 +53,8 @@ public class SalesOrderService implements SalesOrderUseCase {
         if (!query.currentUser().isHq()) {
             String warehouseCode = query.currentUser().warehouseCode();
             if (warehouseCode == null || warehouseCode.isBlank()) {
-                throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
+                // 정상 경로에선 resolver 가 BRANCH_* 창고코드를 이미 강제(401). 여기선 방어용 + 의미상 '인증헤더 누락'.
+                throw new ApiException(ErrorCode.AUTH_HEADER_REQUIRED);
             }
             fromScope = warehouseCode;   // 본인 창고로 강제(전달된 필터 무시)
         }
