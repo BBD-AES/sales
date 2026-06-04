@@ -17,8 +17,8 @@ import java.util.List;
 public class ProcurementStubAdapter implements ProcurementPort {
 
     @Override
-    public void raisePurchaseOrder(String soNumber, String destinationWarehouseCode, List<StockTransferLine> lines) {
-        log.info("[ProcurementStub] PO 발행 so={}, dest={}, lines={} -> 가상 vendor 입고 가정",
+    public void requestPurchase(String soNumber, String destinationWarehouseCode, List<StockTransferLine> lines) {
+        log.info("[ProcurementStub] 구매요청(PR) 접수 so={}, dest={}, lines={} -> procurement가 PO 작성/입고(가상)",
                 soNumber, destinationWarehouseCode, lines);
     }
 }
