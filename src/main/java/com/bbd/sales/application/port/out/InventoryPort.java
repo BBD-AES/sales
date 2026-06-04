@@ -10,11 +10,12 @@ import java.util.List;
 public interface InventoryPort {
 
     /**
-     * HQ 승인 시 재고 예약(동기). available 재고를 원자적으로 차감해 오버셀(음수)을 막는다.
+     * HQ 확정(confirm) 시 재고 예약(동기, 부분예약). available 재고를 원자적으로 차감해 오버셀(음수)을 막는다.
+     * 가용분만 예약하고 라인별 부족분을 반환한다(전량/부분/0 모두 가능).
      * 출발지(source) 선정/할당은 Inventory 가 담당하며, 예약 기록은 soNumber 로 멱등 관리한다.
-     * @return true = 전량 예약 성공(-> IN_FULFILLMENT), false = 재고 부족(-> BACKORDERED -> PO)
+     * @return 라인별 예약 결과(부족분이 있으면 호출측이 sourcing_type 으로 생산/구매 분기)
      */
-    boolean reserve(String soNumber, String destinationWarehouseCode, List<StockTransferLine> lines);
+    List<ReservationResult> reserve(String soNumber, String destinationWarehouseCode, List<StockTransferLine> lines);
 
     /**
      * 수령 확정 시 실재고 이동.
