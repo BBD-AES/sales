@@ -32,8 +32,12 @@ public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolve
                                   NativeWebRequest webRequest,
                                   WebDataBinderFactory binderFactory) {
         String employeeNumber = required(webRequest, "X-Employee-Number");
-        String warehouseCode = webRequest.getHeader("X-Warehouse-Code");
         RoleType role = parseRole(required(webRequest, "X-Role"));
+        // 지점 사용자(BRANCH_*)는 소속 창고가 사실상 필수 -> 경계에서 강제(누락 시 401).
+        // 그래야 서비스가 null 창고로 403/전체노출 같은 모호한 상태에 빠지지 않는다.
+        String warehouseCode = (role == RoleType.BRANCH_MANAGER || role == RoleType.BRANCH_STAFF)
+                ? required(webRequest, "X-Warehouse-Code")
+                : webRequest.getHeader("X-Warehouse-Code");
         return new CurrentUser(employeeNumber, role, warehouseCode);
     }
 
