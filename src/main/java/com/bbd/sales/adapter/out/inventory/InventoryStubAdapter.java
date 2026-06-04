@@ -1,6 +1,7 @@
 package com.bbd.sales.adapter.out.inventory;
 
 import com.bbd.sales.application.port.out.InventoryPort;
+import com.bbd.sales.application.port.out.ReservationResult;
 import com.bbd.sales.application.port.out.StockTransferLine;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -16,9 +17,12 @@ import java.util.List;
 public class InventoryStubAdapter implements InventoryPort {
 
     @Override
-    public boolean reserve(String soNumber, String destinationWarehouseCode, List<StockTransferLine> lines) {
-        log.info("[InventoryStub] 재고 예약 so={}, dest={}, lines={} -> 성공 간주", soNumber, destinationWarehouseCode, lines);
-        return true;   // 스텁: 항상 가용. 실제 어댑터는 원자적 조건부 차감 결과 반환(부족 시 false -> BACKORDERED).
+    public List<ReservationResult> reserve(String soNumber, String destinationWarehouseCode, List<StockTransferLine> lines) {
+        log.info("[InventoryStub] 재고 예약 so={}, dest={}, lines={} -> 전량 가용 간주", soNumber, destinationWarehouseCode, lines);
+        // 스텁: 전량 예약 성공. 실제 어댑터는 원자적 조건부 차감으로 가용분만 예약하고 부족분을 반환.
+        return lines.stream()
+                .map(l -> new ReservationResult(l.sku(), l.quantity(), l.quantity()))
+                .toList();
     }
 
     @Override
