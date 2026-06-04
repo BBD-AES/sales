@@ -6,6 +6,7 @@ import com.bbd.sales.application.port.out.SourcingType;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.Set;
 
 /**
  * 상품/창고 참조 데이터 아웃바운드 어댑터(임시 스텁).
@@ -14,11 +15,17 @@ import java.math.BigDecimal;
 @Component
 public class CatalogStubAdapter implements CatalogPort {
 
+    /**
+     * [데모용] 생산품(MAKE) SKU. 그 외는 BUY(구매품).
+     * 실 item 마스터 연동 시 items.sourcing_type 컬럼으로 대체.
+     */
+    private static final Set<String> DEMO_MAKE_SKUS = Set.of("CLT-DSK-MED-01", "CLT-CVR-MED-01");
+
     @Override
     public ProductSnapshot resolveProduct(String sku) {
         // 실제로는 상품 마스터에서 현재 상품명/단가/조달유형을 읽어와 스냅샷으로 박제.
-        // 스텁: 기본 BUY(구매품). 생산품(MAKE) 시연은 마스터 연동/시드 성형 시 분기.
-        return new ProductSnapshot(sku, "상품-" + sku, BigDecimal.valueOf(1000), SourcingType.BUY);
+        SourcingType sourcingType = DEMO_MAKE_SKUS.contains(sku) ? SourcingType.MAKE : SourcingType.BUY;
+        return new ProductSnapshot(sku, "상품-" + sku, BigDecimal.valueOf(1000), sourcingType);
     }
 
     @Override
