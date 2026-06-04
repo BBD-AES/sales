@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 public record ProductSnapshot(
         String sku,
         String name,
-        BigDecimal unitPrice
+        BigDecimal unitPrice,
+        SourcingType sourcingType   // 부족분 분기용(BUY=구매, MAKE=생산)
 ) {
 }
