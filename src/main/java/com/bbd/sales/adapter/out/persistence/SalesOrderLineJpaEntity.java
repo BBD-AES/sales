@@ -1,5 +1,6 @@
 package com.bbd.sales.adapter.out.persistence;
 
+import com.bbd.sales.domain.FulfillmentSource;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -31,6 +32,12 @@ public class SalesOrderLineJpaEntity {
     private String nameSnapshot;
     private BigDecimal unitPriceSnapshot;
     private int quantity;
+
+    // 라인레벨 충족추적
+    private int reservedQuantity;
+
+    @Enumerated(EnumType.STRING)
+    private FulfillmentSource fulfillmentSource;
 
     public SalesOrderLineJpaEntity(int lineNo, String sku, String nameSnapshot,
                                    BigDecimal unitPriceSnapshot, int quantity) {
