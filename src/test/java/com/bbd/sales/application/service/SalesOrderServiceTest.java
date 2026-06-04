@@ -68,6 +68,7 @@ class SalesOrderServiceTest {
         service.approve("SO-1", HQ);
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.IN_FULFILLMENT);
+        assertThat(so.lines().get(0).fulfillmentSource()).isEqualTo(FulfillmentSource.STOCK);
         verify(eventPublisher).publishFulfilling("SO-1");
         verify(procurementPort, never()).requestPurchase(any(), any(), anyList());
         verify(productionPort, never()).requestProduction(any(), any(), anyList());
@@ -86,6 +87,8 @@ class SalesOrderServiceTest {
         service.approve("SO-1", HQ);
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED);
+        assertThat(so.lines().get(0).reservedQuantity()).isZero();
+        assertThat(so.lines().get(0).fulfillmentSource()).isEqualTo(FulfillmentSource.PURCHASE);
         verify(procurementPort).requestPurchase(eq("SO-1"), eq("WH-BR-001"), anyList());
         verify(productionPort, never()).requestProduction(any(), any(), anyList());
         verify(eventPublisher).publishBackordered("SO-1");
@@ -104,6 +107,8 @@ class SalesOrderServiceTest {
         service.approve("SO-1", HQ);
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED);
+        assertThat(so.lines().get(0).reservedQuantity()).isEqualTo(1);
+        assertThat(so.lines().get(0).fulfillmentSource()).isEqualTo(FulfillmentSource.PRODUCTION);
         verify(productionPort).requestProduction(eq("SO-1"), eq("WH-BR-001"), anyList());
         verify(procurementPort, never()).requestPurchase(any(), any(), anyList());
     }
@@ -139,7 +144,7 @@ class SalesOrderServiceTest {
     @DisplayName("fulfillBackorder: 전량 재예약되면 IN_FULFILLMENT")
     void fulfillBackorder_reserved_inFulfillment() {
         SalesOrder so = submitted("RLY-12V-30A-01", 5);
-        so.backorder("HQ001", NOW); // -> BACKORDERED
+        so.confirmByHq("HQ001", NOW, List.of(new LineReservation("RLY-12V-30A-01", 0, FulfillmentSource.PURCHASE))); // -> BACKORDERED
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
         when(inventoryPort.reserve(any(), any(), anyList()))
                 .thenReturn(List.of(new ReservationResult("RLY-12V-30A-01", 5, 5)));
