@@ -7,9 +7,12 @@ import com.bbd.sales.application.command.UpdateSalesOrderCommand;
 import com.bbd.sales.application.port.in.SalesOrderUseCase;
 import com.bbd.sales.application.port.out.*;
 import com.bbd.sales.application.result.*;
+import com.bbd.sales.domain.FulfillmentSource;
+import com.bbd.sales.domain.LineReservation;
 import com.bbd.sales.domain.SalesOrder;
 import com.bbd.sales.domain.SalesOrderLine;
 import com.bbd.sales.domain.SalesOrderStateException;
+import com.bbd.sales.domain.SalesOrderStatus;
 import com.bbd.sales.global.error.ApiException;
 import com.bbd.sales.global.error.dto.ErrorCode;
 import com.bbd.sales.global.security.CurrentUser;
@@ -152,34 +155,19 @@ public class SalesOrderService implements SalesOrderUseCase {
         authorizeDecision(currentUser);
         requireHqDecidable(so); // 외부 예약 호출 전 상태 선검증(예약 후 도메인 throw 시 고아 예약 방지)
 
-        // 1) 가용분 예약(동기, 부분예약). 음수 방지는 Inventory 의 원자적 차감이 보장.
-        List<ReservationResult> results = inventoryPort.reserve(
-                so.soNumber(), so.fromWarehouseCode(), toTransferLines(so));
+        Routing routing = reserveAndRoute(so);                  // 라인별 가용분 예약 + 부족분 소스 결정
+        so.confirmByHq(currentUser.employeeNumber(), LocalDateTime.now(), routing.reservations());
+        repository.save(so);
 
-        // 2) 부족분을 품목 조달유형으로 분기: MAKE -> 생산요청, BUY -> 구매요청(PR).
-        List<StockTransferLine> toProduce = new ArrayList<>();
-        List<StockTransferLine> toPurchase = new ArrayList<>();
-        for (ReservationResult r : results) {
-            if (r.fullyReserved()) continue;
-            SourcingType type = catalogPort.resolveProduct(r.sku()).sourcingType();
-            (type == SourcingType.MAKE ? toProduce : toPurchase)
-                    .add(new StockTransferLine(r.sku(), r.shortfall()));
-        }
+        // 부족분 소싱 요청: BUY -> 구매요청(PR), MAKE -> 생산요청.
+        if (!routing.toPurchase().isEmpty())
+            procurementPort.requestPurchase(so.soNumber(), so.fromWarehouseCode(), routing.toPurchase());
+        if (!routing.toProduce().isEmpty())
+            productionPort.requestProduction(so.soNumber(), so.fromWarehouseCode(), routing.toProduce());
 
-        LocalDateTime now = LocalDateTime.now();
-        if (toProduce.isEmpty() && toPurchase.isEmpty()) {
-            so.approveByHq(currentUser.employeeNumber(), now);   // 전량 가용 -> IN_FULFILLMENT(출고)
-            repository.save(so);
-            eventPublisher.publishFulfilling(so.soNumber());
-        } else {
-            so.backorder(currentUser.employeeNumber(), now);     // 부족분 존재 -> BACKORDERED
-            repository.save(so);
-            if (!toPurchase.isEmpty())
-                procurementPort.requestPurchase(so.soNumber(), so.fromWarehouseCode(), toPurchase);
-            if (!toProduce.isEmpty())
-                productionPort.requestProduction(so.soNumber(), so.fromWarehouseCode(), toProduce);
-            eventPublisher.publishBackordered(so.soNumber());
-        }
+        if (so.status() == SalesOrderStatus.IN_FULFILLMENT) eventPublisher.publishFulfilling(so.soNumber());
+        else eventPublisher.publishBackordered(so.soNumber());
+
         return statusChange(so, currentUser.employeeNumber(), so.approvedAt(), null);
     }
 
@@ -189,19 +177,17 @@ public class SalesOrderService implements SalesOrderUseCase {
         authorizeDecision(currentUser);
         requireBackordered(so); // 외부 예약 호출 전 상태 선검증
 
-        // 생산/구매 입고분으로 재예약 시도(동기). 전량 예약되면 충족 진행으로 전환.
-        List<ReservationResult> results = inventoryPort.reserve(
-                so.soNumber(), so.fromWarehouseCode(), toTransferLines(so));
-        boolean allReserved = results.stream().allMatch(ReservationResult::fullyReserved);
-
+        // 생산/구매 입고분으로 '미충족 라인만' 재예약(동기). 생산/구매 재요청은 안 함(confirm 때 이미 요청).
+        Routing routing = reserveAndRoute(so);
         LocalDateTime now = LocalDateTime.now();
-        if (allReserved) {
-            so.fulfillFromBackorder(now);  // BACKORDERED -> IN_FULFILLMENT
-            repository.save(so);
+        so.refulfill(routing.reservations(), now);
+        repository.save(so);
+
+        if (so.status() == SalesOrderStatus.IN_FULFILLMENT) {
             eventPublisher.publishFulfilling(so.soNumber());
             return statusChange(so, currentUser.employeeNumber(), now, null);  // 전이 시각으로
         }
-        // 아직 입고 전이면 BACKORDERED 유지(멱등 재시도 가능). 상태 불변이니 승인 시각 유지.
+        // 아직 부족하면 BACKORDERED 유지(멱등 재시도 가능). 상태 불변이니 승인 시각 유지.
         return statusChange(so, currentUser.employeeNumber(), so.approvedAt(), null);
     }
 
@@ -258,6 +244,43 @@ public class SalesOrderService implements SalesOrderUseCase {
         return so.lines().stream()
                 .map(l -> new StockTransferLine(l.sku(), l.quantity()))
                 .toList();
+    }
+
+    /**
+     * 미충족 라인(quantity - reservedQuantity)만 재고 예약하고, 라인별 예약결과 + 부족분 소싱(생산/구매) 라우팅을 만든다.
+     * approve(confirm)/fulfillBackorder(refulfill) 공통 사용. (음수 방지는 Inventory 의 원자적 차감이 보장)
+     */
+    private Routing reserveAndRoute(SalesOrder so) {
+        List<StockTransferLine> outstanding = so.lines().stream()
+                .filter(l -> !l.fullyReserved())
+                .map(l -> new StockTransferLine(l.sku(), l.shortfall()))
+                .toList();
+        List<ReservationResult> results = inventoryPort.reserve(so.soNumber(), so.fromWarehouseCode(), outstanding);
+
+        List<LineReservation> reservations = new ArrayList<>();
+        List<StockTransferLine> toProduce = new ArrayList<>();
+        List<StockTransferLine> toPurchase = new ArrayList<>();
+        for (ReservationResult r : results) {
+            int stillShort = r.requested() - r.reserved();
+            FulfillmentSource source = FulfillmentSource.STOCK;
+            if (stillShort > 0) {
+                SourcingType type = catalogPort.resolveProduct(r.sku()).sourcingType();
+                if (type == SourcingType.MAKE) {
+                    source = FulfillmentSource.PRODUCTION;
+                    toProduce.add(new StockTransferLine(r.sku(), stillShort));
+                } else {
+                    source = FulfillmentSource.PURCHASE;
+                    toPurchase.add(new StockTransferLine(r.sku(), stillShort));
+                }
+            }
+            reservations.add(new LineReservation(r.sku(), r.reserved(), source));
+        }
+        return new Routing(reservations, toProduce, toPurchase);
+    }
+
+    private record Routing(List<LineReservation> reservations,
+                           List<StockTransferLine> toProduce,
+                           List<StockTransferLine> toPurchase) {
     }
 
     /*
