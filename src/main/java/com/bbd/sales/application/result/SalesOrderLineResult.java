@@ -1,5 +1,7 @@
 package com.bbd.sales.application.result;
 
+import com.bbd.sales.domain.FulfillmentSource;
+
 import java.math.BigDecimal;
 
 public record SalesOrderLineResult(
@@ -7,6 +9,8 @@ public record SalesOrderLineResult(
         String sku,
         String nameSnapshot,
         BigDecimal unitPriceSnapshot,
-        int quantity
+        int quantity,
+        int reservedQuantity,
+        FulfillmentSource fulfillmentSource
 ) {
 }

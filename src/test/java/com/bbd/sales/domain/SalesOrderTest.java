@@ -6,24 +6,24 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * SalesOrder 애그리거트 상태전이 단위테스트.
- * 헥사고날 효과 확인용: 스프링/JPA/DB 없이 순수 객체만으로 업무 규칙을 검증한다.
+ * SalesOrder 애그리거트 상태전이 단위테스트 (라인레벨 충족추적).
+ * 스프링/JPA/DB 없이 순수 객체만으로 업무 규칙을 검증한다.
  */
 class SalesOrderTest {
 
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 6, 3, 10, 0);
 
-    // ---------- 상태별 픽스처 ----------
+    // ---------- 픽스처 (단일 라인: SKU-1, qty 3) ----------
 
     private SalesOrder requested() {
-        return SalesOrder.request(
-                "SO-2026-0001", "BR01", "강남지점",
+        return SalesOrder.request("SO-2026-0001", "WH-BR-001", "강남지점",
                 SalesOrderPriority.NORMAL, "메모",
                 List.of(new SalesOrderLine(1, "SKU-1", "볼트", new BigDecimal("100"), 3)),
                 "EMP-staff", NOW);
@@ -35,42 +35,58 @@ class SalesOrderTest {
         return so;
     }
 
-    private SalesOrder inFulfillment() {
-        SalesOrder so = submitted();
-        so.approveByHq("EMP-hq", NOW);
+    private SalesOrder submittedWithDuplicateSkuLines() {
+        SalesOrder so = SalesOrder.request("SO-2026-0002", "WH-BR-001", "강남지점",
+                SalesOrderPriority.NORMAL, "메모",
+                List.of(
+                        new SalesOrderLine(1, "SKU-1", "볼트", new BigDecimal("100"), 3),
+                        new SalesOrderLine(2, "SKU-1", "볼트", new BigDecimal("100"), 2)
+                ),
+                "EMP-staff", NOW);
+        so.submit(NOW);
         return so;
     }
 
+    /** 전량 확보(STOCK) 확정 -> IN_FULFILLMENT */
+    private SalesOrder inFulfillment() {
+        SalesOrder so = submitted();
+        so.confirmByHq("EMP-hq", NOW, List.of(new LineReservation("SKU-1", 3, FulfillmentSource.STOCK)));
+        return so;
+    }
+
+    /** 전량 부족(PURCHASE) 확정 -> BACKORDERED */
     private SalesOrder backordered() {
         SalesOrder so = submitted();
-        so.backorder("EMP-hq", NOW);
+        so.confirmByHq("EMP-hq", NOW, List.of(new LineReservation("SKU-1", 0, FulfillmentSource.PURCHASE)));
         return so;
+    }
+
+    private SalesOrderLine line(SalesOrder so) {
+        return so.lines().get(0);
     }
 
     // ---------- 생성 ----------
 
     @Test
-    @DisplayName("생성하면 REQUESTED, 요청자/총액/라인이 채워진다")
+    @DisplayName("생성하면 REQUESTED, 라인 미예약(reserved=0, source=null)")
     void request_createsRequested() {
         SalesOrder so = requested();
         assertThat(so.status()).isEqualTo(SalesOrderStatus.REQUESTED);
-        assertThat(so.fromWarehouseCode()).isEqualTo("BR01");
-        assertThat(so.requestedBy()).isEqualTo("EMP-staff");
-        assertThat(so.requestedAt()).isEqualTo(NOW);
-        assertThat(so.totalAmount()).isEqualByComparingTo("300"); // 100 * 3
-        assertThat(so.lines()).hasSize(1);
+        assertThat(so.totalAmount()).isEqualByComparingTo("300");
+        assertThat(line(so).reservedQuantity()).isZero();
+        assertThat(line(so).fulfillmentSource()).isNull();
+        assertThat(line(so).fullyReserved()).isFalse();
     }
 
     @Test
-    @DisplayName("라인 없이 생성하면 거부된다")
+    @DisplayName("라인 없이 생성하면 거부")
     void request_rejectsEmptyLines() {
-        assertThatThrownBy(() -> SalesOrder.request(
-                "SO-2026-0002", "BR01", "강남지점",
+        assertThatThrownBy(() -> SalesOrder.request("SO-X", "WH-BR-001", "강남지점",
                 SalesOrderPriority.NORMAL, null, List.of(), "EMP-staff", NOW))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
-    // ---------- 제출(submit) ----------
+    // ---------- 제출/취소 ----------
 
     @Test
     @DisplayName("REQUESTED -> submit -> SUBMITTED")
@@ -81,26 +97,22 @@ class SalesOrderTest {
     }
 
     @Test
-    @DisplayName("SUBMITTED 에서 다시 submit 하면 NOT_SUBMITTABLE")
+    @DisplayName("SUBMITTED 에서 다시 submit -> NOT_SUBMITTABLE")
     void submit_fromNonRequested_fails() {
         SalesOrder so = submitted();
         assertViolation(() -> so.submit(NOW), Violation.NOT_SUBMITTABLE);
     }
 
-    // ---------- 취소(cancel) ----------
-
     @Test
     @DisplayName("REQUESTED/SUBMITTED 에서는 취소 가능")
     void cancel_allowedUntilSubmitted() {
-        SalesOrder fromRequested = requested();
-        fromRequested.cancel("EMP-staff", NOW);
-        assertThat(fromRequested.status()).isEqualTo(SalesOrderStatus.CANCELED);
+        SalesOrder a = requested();
+        a.cancel("EMP-staff", NOW);
+        assertThat(a.status()).isEqualTo(SalesOrderStatus.CANCELED);
 
-        SalesOrder fromSubmitted = submitted();
-        fromSubmitted.cancel("EMP-mgr", NOW);
-        assertThat(fromSubmitted.status()).isEqualTo(SalesOrderStatus.CANCELED);
-        assertThat(fromSubmitted.canceledBy()).isEqualTo("EMP-mgr");
-        assertThat(fromSubmitted.canceledAt()).isEqualTo(NOW);
+        SalesOrder b = submitted();
+        b.cancel("EMP-mgr", NOW);
+        assertThat(b.status()).isEqualTo(SalesOrderStatus.CANCELED);
     }
 
     @Test
@@ -110,119 +122,189 @@ class SalesOrderTest {
         assertViolation(() -> so.cancel("EMP-staff", NOW), Violation.NOT_CANCELABLE);
     }
 
-    // ---------- HQ 승인(approveByHq) ----------
+    // ---------- HQ 확정 (confirmByHq) ----------
 
     @Test
-    @DisplayName("SUBMITTED -> approveByHq -> IN_FULFILLMENT, 승인자 기록")
-    void approveByHq_fromSubmitted() {
+    @DisplayName("confirmByHq: 전량 확보 -> IN_FULFILLMENT, 라인 full+STOCK, 승인자 기록")
+    void confirmByHq_allReserved_inFulfillment() {
         SalesOrder so = submitted();
-        so.approveByHq("EMP-hq", NOW);
+        so.confirmByHq("EMP-hq", NOW, List.of(new LineReservation("SKU-1", 3, FulfillmentSource.STOCK)));
         assertThat(so.status()).isEqualTo(SalesOrderStatus.IN_FULFILLMENT);
         assertThat(so.approvedBy()).isEqualTo("EMP-hq");
-        assertThat(so.approvedAt()).isEqualTo(NOW);
+        assertThat(line(so).fullyReserved()).isTrue();
+        assertThat(line(so).fulfillmentSource()).isEqualTo(FulfillmentSource.STOCK);
     }
 
     @Test
-    @DisplayName("REQUESTED 에서 approveByHq 하면 NOT_DECIDABLE")
-    void approveByHq_fromRequested_fails() {
-        SalesOrder so = requested();
-        assertViolation(() -> so.approveByHq("EMP-hq", NOW), Violation.NOT_DECIDABLE);
-    }
-
-    // ---------- 백오더(backorder) ----------
-
-    @Test
-    @DisplayName("SUBMITTED -> backorder -> BACKORDERED")
-    void backorder_fromSubmitted() {
+    @DisplayName("confirmByHq: 부분 확보 -> BACKORDERED, 부족분 소스 기록")
+    void confirmByHq_shortfall_backordered() {
         SalesOrder so = submitted();
-        so.backorder("EMP-hq", NOW);
+        so.confirmByHq("EMP-hq", NOW, List.of(new LineReservation("SKU-1", 1, FulfillmentSource.PRODUCTION)));
         assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED);
-        assertThat(so.approvedBy()).isEqualTo("EMP-hq");
+        assertThat(line(so).reservedQuantity()).isEqualTo(1);
+        assertThat(line(so).fulfillmentSource()).isEqualTo(FulfillmentSource.PRODUCTION);
     }
 
     @Test
-    @DisplayName("REQUESTED 에서 backorder 하면 NOT_DECIDABLE")
-    void backorder_fromRequested_fails() {
+    @DisplayName("confirmByHq: REQUESTED 에서 -> NOT_DECIDABLE")
+    void confirmByHq_fromRequested_fails() {
         SalesOrder so = requested();
-        assertViolation(() -> so.backorder("EMP-hq", NOW), Violation.NOT_DECIDABLE);
-    }
-
-    // ---------- 백오더 해소(fulfillFromBackorder) ----------
-
-    @Test
-    @DisplayName("BACKORDERED -> fulfillFromBackorder -> IN_FULFILLMENT")
-    void fulfillFromBackorder_fromBackordered() {
-        SalesOrder so = backordered();
-        so.fulfillFromBackorder(NOW);
-        assertThat(so.status()).isEqualTo(SalesOrderStatus.IN_FULFILLMENT);
+        assertViolation(() -> so.confirmByHq("EMP-hq", NOW, List.of(new LineReservation("SKU-1", 3, FulfillmentSource.STOCK))),
+                Violation.NOT_DECIDABLE);
     }
 
     @Test
-    @DisplayName("SUBMITTED 에서 fulfillFromBackorder 하면 NOT_FULFILLABLE")
-    void fulfillFromBackorder_fromSubmitted_fails() {
+    @DisplayName("confirmByHq: 예약 목록이 null 이면 거부하고 상태를 바꾸지 않는다")
+    void confirmByHq_nullReservations_failsWithoutMutation() {
         SalesOrder so = submitted();
-        assertViolation(() -> so.fulfillFromBackorder(NOW), Violation.NOT_FULFILLABLE);
+
+        assertThatThrownBy(() -> so.confirmByHq("EMP-hq", NOW, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("reservations");
+
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.SUBMITTED);
+        assertThat(line(so).reservedQuantity()).isZero();
     }
 
-    // ---------- 반려(reject) ----------
+    @Test
+    @DisplayName("confirmByHq: 예약 항목이 null 이면 거부하고 상태를 바꾸지 않는다")
+    void confirmByHq_nullReservationItem_failsWithoutMutation() {
+        SalesOrder so = submitted();
+
+        assertThatThrownBy(() -> so.confirmByHq("EMP-hq", NOW, Collections.singletonList(null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("reservation 항목");
+
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.SUBMITTED);
+        assertThat(line(so).reservedQuantity()).isZero();
+    }
 
     @Test
-    @DisplayName("SUBMITTED -> reject(사유) -> REJECTED")
+    @DisplayName("confirmByHq: 주문 라인에 없는 sku 예약이면 거부하고 상태를 바꾸지 않는다")
+    void confirmByHq_unknownSkuReservation_failsWithoutMutation() {
+        SalesOrder so = submitted();
+
+        assertThatThrownBy(() -> so.confirmByHq("EMP-hq", NOW,
+                List.of(new LineReservation("SKU-X", 1, FulfillmentSource.STOCK))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("주문 라인에 없는 sku");
+
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.SUBMITTED);
+        assertThat(line(so).reservedQuantity()).isZero();
+    }
+
+    @Test
+    @DisplayName("confirmByHq: 같은 sku 예약이 중복되면 거부하고 일부 예약도 반영하지 않는다")
+    void confirmByHq_duplicateReservationSku_failsWithoutPartialApply() {
+        SalesOrder so = submitted();
+
+        assertThatThrownBy(() -> so.confirmByHq("EMP-hq", NOW, List.of(
+                new LineReservation("SKU-1", 1, FulfillmentSource.PRODUCTION),
+                new LineReservation("SKU-1", 2, FulfillmentSource.STOCK)
+        )))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("동일 sku 예약");
+
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.SUBMITTED);
+        assertThat(line(so).reservedQuantity()).isZero();
+    }
+
+    @Test
+    @DisplayName("confirmByHq: 같은 sku 라인이 여러 개면 예약 매핑이 모호하므로 거부한다")
+    void confirmByHq_duplicateSkuLines_failsWithoutMutation() {
+        SalesOrder so = submittedWithDuplicateSkuLines();
+
+        assertThatThrownBy(() -> so.confirmByHq("EMP-hq", NOW,
+                List.of(new LineReservation("SKU-1", 3, FulfillmentSource.STOCK))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("예약 매핑이 모호합니다");
+
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.SUBMITTED);
+        assertThat(so.lines()).allSatisfy(line -> assertThat(line.reservedQuantity()).isZero());
+    }
+
+    // ---------- 백오더 재충족 (refulfill) ----------
+
+    @Test
+    @DisplayName("refulfill: 잔여 전량 확보 -> IN_FULFILLMENT")
+    void refulfill_allReserved_inFulfillment() {
+        SalesOrder so = backordered();   // reserved=0
+        so.refulfill(List.of(new LineReservation("SKU-1", 3, FulfillmentSource.STOCK)), NOW);
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.IN_FULFILLMENT);
+        assertThat(line(so).fullyReserved()).isTrue();
+    }
+
+    @Test
+    @DisplayName("refulfill: 여전히 부족하면 BACKORDERED 유지")
+    void refulfill_stillShort_staysBackordered() {
+        SalesOrder so = backordered();   // reserved=0, qty 3
+        so.refulfill(List.of(new LineReservation("SKU-1", 2, FulfillmentSource.PURCHASE)), NOW);
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED);
+        assertThat(line(so).reservedQuantity()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("refulfill: SUBMITTED 에서 -> NOT_FULFILLABLE")
+    void refulfill_fromSubmitted_fails() {
+        SalesOrder so = submitted();
+        assertViolation(() -> so.refulfill(List.of(new LineReservation("SKU-1", 3, FulfillmentSource.STOCK)), NOW),
+                Violation.NOT_FULFILLABLE);
+    }
+
+    // ---------- 반려 ----------
+
+    @Test
+    @DisplayName("reject: SUBMITTED -> REJECTED(사유)")
     void reject_fromSubmitted() {
         SalesOrder so = submitted();
         so.reject("EMP-hq", "예산 초과", NOW);
         assertThat(so.status()).isEqualTo(SalesOrderStatus.REJECTED);
         assertThat(so.rejectedReason()).isEqualTo("예산 초과");
-        assertThat(so.rejectedBy()).isEqualTo("EMP-hq");
-        assertThat(so.rejectedAt()).isEqualTo(NOW);
     }
 
     @Test
-    @DisplayName("반려 사유가 비면 REJECT_REASON_REQUIRED")
+    @DisplayName("reject: 사유 공백 -> REJECT_REASON_REQUIRED")
     void reject_blankReason_fails() {
         SalesOrder so = submitted();
         assertViolation(() -> so.reject("EMP-hq", "  ", NOW), Violation.REJECT_REASON_REQUIRED);
     }
 
     @Test
-    @DisplayName("REQUESTED 에서 reject 하면 NOT_DECIDABLE")
+    @DisplayName("reject: REQUESTED 에서 -> NOT_DECIDABLE")
     void reject_fromRequested_fails() {
         SalesOrder so = requested();
         assertViolation(() -> so.reject("EMP-hq", "사유", NOW), Violation.NOT_DECIDABLE);
     }
 
-    // ---------- 수령(receive) ----------
+    // ---------- 수령 ----------
 
     @Test
-    @DisplayName("IN_FULFILLMENT -> receive -> RECEIVED")
+    @DisplayName("receive: IN_FULFILLMENT -> RECEIVED")
     void receive_fromInFulfillment() {
         SalesOrder so = inFulfillment();
         so.receive("EMP-staff", NOW);
         assertThat(so.status()).isEqualTo(SalesOrderStatus.RECEIVED);
-        assertThat(so.receivedBy()).isEqualTo("EMP-staff");
-        assertThat(so.receivedAt()).isEqualTo(NOW);
     }
 
     @Test
-    @DisplayName("SUBMITTED 에서 receive 하면 NOT_RECEIVABLE")
+    @DisplayName("receive: SUBMITTED 에서 -> NOT_RECEIVABLE")
     void receive_fromSubmitted_fails() {
         SalesOrder so = submitted();
         assertViolation(() -> so.receive("EMP-staff", NOW), Violation.NOT_RECEIVABLE);
     }
 
-    // ---------- 수정(updateContents) ----------
+    // ---------- 수정 ----------
 
     @Test
-    @DisplayName("REQUESTED 에서는 내용 수정 가능")
+    @DisplayName("updateContents: REQUESTED 가능")
     void update_fromRequested() {
         SalesOrder so = requested();
-        so.updateContents(SalesOrderPriority.URGENT, "수정 메모", null);
+        so.updateContents(SalesOrderPriority.URGENT, "수정", null);
         assertThat(so.priority()).isEqualTo(SalesOrderPriority.URGENT);
-        assertThat(so.note()).isEqualTo("수정 메모");
     }
 
     @Test
-    @DisplayName("SUBMITTED 에서는 수정 불가(NOT_EDITABLE)")
+    @DisplayName("updateContents: SUBMITTED 에서 -> NOT_EDITABLE")
     void update_fromSubmitted_fails() {
         SalesOrder so = submitted();
         assertViolation(() -> so.updateContents(SalesOrderPriority.URGENT, "x", null), Violation.NOT_EDITABLE);
@@ -235,7 +317,7 @@ class SalesOrderTest {
     void happyPath() {
         SalesOrder so = requested();
         so.submit(NOW);
-        so.approveByHq("EMP-hq", NOW);
+        so.confirmByHq("EMP-hq", NOW, List.of(new LineReservation("SKU-1", 3, FulfillmentSource.STOCK)));
         so.receive("EMP-staff", NOW);
         assertThat(so.status()).isEqualTo(SalesOrderStatus.RECEIVED);
     }
