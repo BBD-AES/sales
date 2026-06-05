@@ -4,7 +4,9 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 출고 요청 애그리거트 루트 (도메인 코어).
@@ -185,11 +187,58 @@ public class SalesOrder {
     }
 
     private void applyReservations(List<LineReservation> reservations) {
-        for (LineReservation r : reservations) {
-            lines.stream()
-                    .filter(l -> l.sku().equals(r.sku()))
-                    .forEach(l -> l.applyReservation(r.reserved(), r.source()));
+        if (reservations == null) {
+            throw new IllegalArgumentException("reservations 는 필수입니다.");
         }
+
+        List<ReservationApplication> applications = new ArrayList<>();
+        Set<String> reservationSkus = new HashSet<>();
+        for (LineReservation r : reservations) {
+            validateReservation(r);
+            if (!reservationSkus.add(r.sku())) {
+                throw new IllegalArgumentException("동일 sku 예약이 여러 번 전달되었습니다: " + r.sku());
+            }
+            applications.add(new ReservationApplication(findUniqueLineBySku(r.sku()), r));
+        }
+
+        for (ReservationApplication application : applications) {
+            LineReservation r = application.reservation();
+            application.line().applyReservation(r.reserved(), r.source());
+        }
+    }
+
+    private void validateReservation(LineReservation reservation) {
+        if (reservation == null) {
+            throw new IllegalArgumentException("reservation 항목은 null 일 수 없습니다.");
+        }
+        if (reservation.sku() == null || reservation.sku().isBlank()) {
+            throw new IllegalArgumentException("reservation sku 는 필수입니다.");
+        }
+        if (reservation.reserved() < 0) {
+            throw new IllegalArgumentException("reserved 는 0 이상이어야 합니다.");
+        }
+        if (reservation.source() == null) {
+            throw new IllegalArgumentException("reservation source 는 필수입니다.");
+        }
+    }
+
+    private SalesOrderLine findUniqueLineBySku(String sku) {
+        SalesOrderLine matched = null;
+        for (SalesOrderLine line : lines) {
+            if (line.sku().equals(sku)) {
+                if (matched != null) {
+                    throw new IllegalArgumentException("동일 sku 라인이 여러 개여서 예약 매핑이 모호합니다: " + sku);
+                }
+                matched = line;
+            }
+        }
+        if (matched == null) {
+            throw new IllegalArgumentException("주문 라인에 없는 sku 예약입니다: " + sku);
+        }
+        return matched;
+    }
+
+    private record ReservationApplication(SalesOrderLine line, LineReservation reservation) {
     }
 
     /** 주문 상태 파생: 전 라인 충족 -> IN_FULFILLMENT, 하나라도 부족 -> BACKORDERED. */
