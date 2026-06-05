@@ -1,5 +1,7 @@
 package com.bbd.sales.adapter.in.web.dto;
 
+import com.bbd.sales.domain.FulfillmentSource;
+
 import java.math.BigDecimal;
 
 public record SalesOrderLineResponse(
@@ -7,6 +9,8 @@ public record SalesOrderLineResponse(
         String sku,
         String nameSnapshot,
         BigDecimal unitPriceSnapshot,
-        int quantity
+        int quantity,
+        int reservedQuantity,
+        FulfillmentSource fulfillmentSource
 ) {
 }
