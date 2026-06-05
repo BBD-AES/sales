@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,6 +31,18 @@ class SalesOrderTest {
 
     private SalesOrder submitted() {
         SalesOrder so = requested();
+        so.submit(NOW);
+        return so;
+    }
+
+    private SalesOrder submittedWithDuplicateSkuLines() {
+        SalesOrder so = SalesOrder.request("SO-2026-0002", "WH-BR-001", "강남지점",
+                SalesOrderPriority.NORMAL, "메모",
+                List.of(
+                        new SalesOrderLine(1, "SKU-1", "볼트", new BigDecimal("100"), 3),
+                        new SalesOrderLine(2, "SKU-1", "볼트", new BigDecimal("100"), 2)
+                ),
+                "EMP-staff", NOW);
         so.submit(NOW);
         return so;
     }
@@ -138,6 +151,76 @@ class SalesOrderTest {
         SalesOrder so = requested();
         assertViolation(() -> so.confirmByHq("EMP-hq", NOW, List.of(new LineReservation("SKU-1", 3, FulfillmentSource.STOCK))),
                 Violation.NOT_DECIDABLE);
+    }
+
+    @Test
+    @DisplayName("confirmByHq: 예약 목록이 null 이면 거부하고 상태를 바꾸지 않는다")
+    void confirmByHq_nullReservations_failsWithoutMutation() {
+        SalesOrder so = submitted();
+
+        assertThatThrownBy(() -> so.confirmByHq("EMP-hq", NOW, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("reservations");
+
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.SUBMITTED);
+        assertThat(line(so).reservedQuantity()).isZero();
+    }
+
+    @Test
+    @DisplayName("confirmByHq: 예약 항목이 null 이면 거부하고 상태를 바꾸지 않는다")
+    void confirmByHq_nullReservationItem_failsWithoutMutation() {
+        SalesOrder so = submitted();
+
+        assertThatThrownBy(() -> so.confirmByHq("EMP-hq", NOW, Collections.singletonList(null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("reservation 항목");
+
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.SUBMITTED);
+        assertThat(line(so).reservedQuantity()).isZero();
+    }
+
+    @Test
+    @DisplayName("confirmByHq: 주문 라인에 없는 sku 예약이면 거부하고 상태를 바꾸지 않는다")
+    void confirmByHq_unknownSkuReservation_failsWithoutMutation() {
+        SalesOrder so = submitted();
+
+        assertThatThrownBy(() -> so.confirmByHq("EMP-hq", NOW,
+                List.of(new LineReservation("SKU-X", 1, FulfillmentSource.STOCK))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("주문 라인에 없는 sku");
+
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.SUBMITTED);
+        assertThat(line(so).reservedQuantity()).isZero();
+    }
+
+    @Test
+    @DisplayName("confirmByHq: 같은 sku 예약이 중복되면 거부하고 일부 예약도 반영하지 않는다")
+    void confirmByHq_duplicateReservationSku_failsWithoutPartialApply() {
+        SalesOrder so = submitted();
+
+        assertThatThrownBy(() -> so.confirmByHq("EMP-hq", NOW, List.of(
+                new LineReservation("SKU-1", 1, FulfillmentSource.PRODUCTION),
+                new LineReservation("SKU-1", 2, FulfillmentSource.STOCK)
+        )))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("동일 sku 예약");
+
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.SUBMITTED);
+        assertThat(line(so).reservedQuantity()).isZero();
+    }
+
+    @Test
+    @DisplayName("confirmByHq: 같은 sku 라인이 여러 개면 예약 매핑이 모호하므로 거부한다")
+    void confirmByHq_duplicateSkuLines_failsWithoutMutation() {
+        SalesOrder so = submittedWithDuplicateSkuLines();
+
+        assertThatThrownBy(() -> so.confirmByHq("EMP-hq", NOW,
+                List.of(new LineReservation("SKU-1", 3, FulfillmentSource.STOCK))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("예약 매핑이 모호합니다");
+
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.SUBMITTED);
+        assertThat(so.lines()).allSatisfy(line -> assertThat(line.reservedQuantity()).isZero());
     }
 
     // ---------- 백오더 재충족 (refulfill) ----------
