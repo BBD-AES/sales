@@ -4,7 +4,9 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 출고 요청 애그리거트 루트 (도메인 코어).
@@ -159,38 +161,90 @@ public class SalesOrder {
     }
 
     /**
-     * HQ 승인 -> 충족 진행. SUBMITTED 에서만.
-     * 재고 확인 결과에 따라 BACKORDERED 로 분기하는 로직은 InventoryPort 연동 커밋에서 추가한다.
-     * 현재는 낙관적으로 바로 IN_FULFILLMENT 로 둔다.
+     * HQ 확정. SUBMITTED 에서만. 라인별 예약을 반영하고 주문 상태를 파생한다.
+     * 전 라인 충족이면 IN_FULFILLMENT, 부족분이 있으면 BACKORDERED. 승인자(HQ)를 기록.
      */
-    public void approveByHq(String actor, LocalDateTime now) {
+    public void confirmByHq(String actor, LocalDateTime now, List<LineReservation> reservations) {
         if (!status.canHqDecide()) {
             throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_DECIDABLE);
         }
-        this.status = SalesOrderStatus.IN_FULFILLMENT;
+        applyReservations(reservations);
         this.approvedBy = actor;
         this.approvedAt = now;
+        this.status = deriveStatus();
     }
 
     /**
-     * HQ 승인했으나 재고 부족 -> 백오더. SUBMITTED 에서만. 승인자(HQ)는 기록한다.
-     * BACKORDERED -> IN_FULFILLMENT 전이(PO 입고 후)는 조달 연동 커밋에서 추가.
+     * 백오더 재충족. BACKORDERED 에서만. 생산/구매 입고분을 라인에 반영하고 상태를 재파생(승인자는 유지).
+     * 전 라인 충족되면 IN_FULFILLMENT, 아직 부족하면 BACKORDERED 유지.
      */
-    public void backorder(String actor, LocalDateTime now) {
-        if (!status.canHqDecide()) {
-            throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_DECIDABLE);
-        }
-        this.status = SalesOrderStatus.BACKORDERED;
-        this.approvedBy = actor;
-        this.approvedAt = now;
-    }
-
-    /** PO 입고 후 백오더 해소. BACKORDERED -> IN_FULFILLMENT. 승인자는 backorder 시점 값 유지. */
-    public void fulfillFromBackorder(LocalDateTime now) {
+    public void refulfill(List<LineReservation> reservations, LocalDateTime now) {
         if (!status.isBackordered()) {
             throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_FULFILLABLE);
         }
-        this.status = SalesOrderStatus.IN_FULFILLMENT;
+        applyReservations(reservations);
+        this.status = deriveStatus();
+    }
+
+    private void applyReservations(List<LineReservation> reservations) {
+        if (reservations == null) {
+            throw new IllegalArgumentException("reservations 는 필수입니다.");
+        }
+
+        List<ReservationApplication> applications = new ArrayList<>();
+        Set<String> reservationSkus = new HashSet<>();
+        for (LineReservation r : reservations) {
+            validateReservation(r);
+            if (!reservationSkus.add(r.sku())) {
+                throw new IllegalArgumentException("동일 sku 예약이 여러 번 전달되었습니다: " + r.sku());
+            }
+            applications.add(new ReservationApplication(findUniqueLineBySku(r.sku()), r));
+        }
+
+        for (ReservationApplication application : applications) {
+            LineReservation r = application.reservation();
+            application.line().applyReservation(r.reserved(), r.source());
+        }
+    }
+
+    private void validateReservation(LineReservation reservation) {
+        if (reservation == null) {
+            throw new IllegalArgumentException("reservation 항목은 null 일 수 없습니다.");
+        }
+        if (reservation.sku() == null || reservation.sku().isBlank()) {
+            throw new IllegalArgumentException("reservation sku 는 필수입니다.");
+        }
+        if (reservation.reserved() < 0) {
+            throw new IllegalArgumentException("reserved 는 0 이상이어야 합니다.");
+        }
+        if (reservation.source() == null) {
+            throw new IllegalArgumentException("reservation source 는 필수입니다.");
+        }
+    }
+
+    private SalesOrderLine findUniqueLineBySku(String sku) {
+        SalesOrderLine matched = null;
+        for (SalesOrderLine line : lines) {
+            if (line.sku().equals(sku)) {
+                if (matched != null) {
+                    throw new IllegalArgumentException("동일 sku 라인이 여러 개여서 예약 매핑이 모호합니다: " + sku);
+                }
+                matched = line;
+            }
+        }
+        if (matched == null) {
+            throw new IllegalArgumentException("주문 라인에 없는 sku 예약입니다: " + sku);
+        }
+        return matched;
+    }
+
+    private record ReservationApplication(SalesOrderLine line, LineReservation reservation) {
+    }
+
+    /** 주문 상태 파생: 전 라인 충족 -> IN_FULFILLMENT, 하나라도 부족 -> BACKORDERED. */
+    private SalesOrderStatus deriveStatus() {
+        boolean allFull = lines.stream().allMatch(SalesOrderLine::fullyReserved);
+        return allFull ? SalesOrderStatus.IN_FULFILLMENT : SalesOrderStatus.BACKORDERED;
     }
 
     /** 반려. SUBMITTED 에서만(HQ 결정), 사유 필수. */
