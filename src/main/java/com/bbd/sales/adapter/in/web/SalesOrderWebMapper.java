@@ -100,6 +100,7 @@ public class SalesOrderWebMapper {
 
     private SalesOrderLineResponse toLineResponse(SalesOrderLineResult r) {
         return new SalesOrderLineResponse(
-                r.lineNo(), r.sku(), r.nameSnapshot(), r.unitPriceSnapshot(), r.quantity());
+                r.lineNo(), r.sku(), r.nameSnapshot(), r.unitPriceSnapshot(), r.quantity(),
+                r.reservedQuantity(), r.fulfillmentSource());
     }
 }
