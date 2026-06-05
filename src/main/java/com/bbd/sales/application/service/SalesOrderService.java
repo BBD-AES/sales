@@ -344,7 +344,8 @@ public class SalesOrderService implements SalesOrderUseCase {
     private SalesOrderResult toResult(SalesOrder so) {
         List<SalesOrderLineResult> lines = so.lines().stream()
                 .map(l -> new SalesOrderLineResult(
-                        l.lineNo(), l.sku(), l.nameSnapshot(), l.unitPriceSnapshot(), l.quantity()))
+                        l.lineNo(), l.sku(), l.nameSnapshot(), l.unitPriceSnapshot(), l.quantity(),
+                        l.reservedQuantity(), l.fulfillmentSource()))
                 .toList();
         return new SalesOrderResult(
                 so.soNumber(),
