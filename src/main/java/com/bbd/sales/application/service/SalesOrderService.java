@@ -40,6 +40,9 @@ public class SalesOrderService implements SalesOrderUseCase {
 
     private final SalesOrderRepository repository;
     private final InventoryPort inventoryPort;
+    /**
+     * 서비스는 인터페이스 타입만 앎. 어떤 구현이 들어올 지는 스프링이 런타임에 주입함. (LoggingSalesOrderEventPublisher -> OutboxSalesOrderEventPublisher로 변경)
+     */
     private final SalesOrderEventPublisher eventPublisher;
     private final CatalogPort catalogPort;
     private final ProcurementPort procurementPort;
@@ -128,6 +131,8 @@ public class SalesOrderService implements SalesOrderUseCase {
 
     // ============================ 상태 전이 ============================
 
+
+    /** 헥사고날에서 필요성: 포트만 의존 -> 구현이 뭐든 무관*/
     @Override
     public SalesOrderStatusChangeResult submit(String soNumber, CurrentUser currentUser) {
         SalesOrder so = load(soNumber);
@@ -135,6 +140,9 @@ public class SalesOrderService implements SalesOrderUseCase {
         LocalDateTime now = LocalDateTime.now();
         so.submit(now);                          // REQUESTED 검증은 도메인이
         repository.save(so);
+        // TODO: 현재는 SO id만 보내고 있지만, payload에 풍부한 데이터를 담아야 할 때 (객체상태포함) 데이터를 통째로 스냅샷으로 고정해야함(나중에 조회할때 상태 바뀐 상황 예방)
+        // eventPublisher.publishSubmitted(new SalesOrderSubmittedEvent(
+        //        so.soNumber(), so.requestedBy(), so.lines(), so.status(), now));
         eventPublisher.publishSubmitted(so.soNumber());
         return statusChange(so, currentUser.employeeNumber(), now, null);
     }
