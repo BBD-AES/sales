@@ -31,7 +31,7 @@ spring:
       encoding: UTF-8
 
   kafka:
-    bootstrap-servers: kafka.inwoohub.com:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:kafka.inwoohub.com:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer

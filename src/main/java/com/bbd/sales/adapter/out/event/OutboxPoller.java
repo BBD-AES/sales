@@ -7,6 +7,8 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * 헥사고날에서 위치: 인프라 구동 컴포넌트(@Scheduled)
  * 필요성: outbox->Kafka 중계/비동기/재시도/at-least-once
@@ -29,8 +31,8 @@ public class OutboxPoller {
         for (OutboxEvent e : outbox.findTop100BySentFalseOrderByIdAsc()) {
             String topic = "sales.order." + e.getEventType(); // -> sales.order.submitted
             try {
-                // 키 = soNumber -> 같은 주문은 같은 파티션(순서 보장). .get() 으로 발행 확인 후에만 sent 처리.
-                kafkaTemplate.send(topic, e.getAggregateId(), e.getPayload()).get();
+                // 키 = soNumber -> 같은 주문은 같은 파티션(순서 보장). get(timeout)으로 발행 확인 후 sent (브로커 지연 시 무한 대기 방지).
+                kafkaTemplate.send(topic, e.getAggregateId(), e.getPayload()).get(5, TimeUnit.SECONDS);
                 e.markSent(); // 발행처리
             } catch (Exception ex) {
                 log.warn("[outbox] 발행 실패 id={} topic={} -> 다음 주기 재시도", e.getId(), topic, ex);
