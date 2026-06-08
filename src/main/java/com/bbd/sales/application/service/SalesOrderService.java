@@ -250,6 +250,10 @@ public class SalesOrderService implements SalesOrderUseCase {
      * 미충족 라인(quantity - reservedQuantity)만 재고 예약하고, 라인별 예약결과 + 부족분 소싱(생산/구매) 라우팅을 만든다.
      * approve(confirm)/fulfillBackorder(refulfill) 공통 사용. (음수 방지는 Inventory 의 원자적 차감이 보장)
      */
+    // 아직 부족한 라인만 계산
+    // Inventory에 "이 수량 예약 가능해?" 라고 물음
+    // 예약된 수량은 LineReservation으로 만듦
+    // 부족분 있으면 Catalog의 sourcing type을 보고 MAKE면 생산 요청, 아니면 구매 요청 목록에 넣는다.
     private Routing reserveAndRoute(SalesOrder so) {
         List<StockTransferLine> outstanding = so.lines().stream()
                 .filter(l -> !l.fullyReserved())
@@ -278,6 +282,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         return new Routing(reservations, toProduce, toPurchase);
     }
 
+    // 부족분 업무 라우팅(생산으로 보낼지 구매로 보낼지 나눔)
     private record Routing(List<LineReservation> reservations,
                            List<StockTransferLine> toProduce,
                            List<StockTransferLine> toPurchase) {

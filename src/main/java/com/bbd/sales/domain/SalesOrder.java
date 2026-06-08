@@ -205,6 +205,7 @@ public class SalesOrder {
 
         List<ReservationApplication> applications = new ArrayList<>();
         Set<String> reservationSkus = new HashSet<>();
+        // 중간에 잘못된 예약이 있을 때 앞 예약만 저장되지 않도록 검증
         for (LineReservation r : reservations) {
             validateReservation(r);
             if (!reservationSkus.add(r.sku())) {
