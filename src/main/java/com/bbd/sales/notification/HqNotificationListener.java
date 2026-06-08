@@ -3,6 +3,7 @@ package com.bbd.sales.notification;
 import com.bbd.sales.adapter.out.event.SalesOrderEventMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -29,10 +30,15 @@ public class HqNotificationListener {
         if (notifications.existsByEventId(ev.eventId())) {
             return; // 이미 처리한 이벤트 -> 멱등 무시(재배달 대비)
         }
-        notifications.save(new Notification(
-                "HQ_MANAGER", ev.soNumber(),
-                "출고요청 " + ev.soNumber() + " 본사 검토 대기", ev.eventId()
-        ));
-        log.info("[notify] HQ 알림 생성 so={}", ev.soNumber());
+        try {
+            notifications.save(new Notification(
+                    "HQ_MANAGER", ev.soNumber(),
+                    "출고요청 " + ev.soNumber() + " 본사 검토 대기", ev.eventId()
+            ));
+            log.info("[notify] HQ 알림 생성 so={}", ev.soNumber());
+        } catch (DataIntegrityViolationException dup) {
+            // 동시 소비 레이스: eventId unique 제약 위반 = 이미 처리됨 -> 멱등 처리(정상 종료)
+            log.debug("[notify] 중복 이벤트 무시 eventId={}", ev.eventId());
+        }
     }
 }

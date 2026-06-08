@@ -21,6 +21,6 @@ public class NotificationController {
         if (!currentUser.isHq()) {
             throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_ROLE);
         }
-        return notifications.findByTargetRoleAndReadFalseOrderByIdDesc("HQ_MANAGER");
+        return notifications.findTop100ByTargetRoleAndReadFalseOrderByIdDesc("HQ_MANAGER");
     }
 }

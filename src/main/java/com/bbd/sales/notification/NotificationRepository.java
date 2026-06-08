@@ -6,5 +6,5 @@ import java.util.List;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
      boolean existsByEventId(String eventId);
-     List<Notification> findByTargetRoleAndReadFalseOrderByIdDesc(String targetRole);
+     List<Notification> findTop100ByTargetRoleAndReadFalseOrderByIdDesc(String targetRole);
 }

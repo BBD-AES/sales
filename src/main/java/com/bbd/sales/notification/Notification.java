@@ -14,13 +14,17 @@ public class Notification {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @Column(nullable = false)
     private String targetRole; // "HQ_MANAGER"
+    @Column(nullable = false)
     private String soNumber;
+    @Column(nullable = false)
     private String message;
 
-    @Column(unique = true)
-    private String eventId; // 멱등 가드(중복 소비 차단)
+    @Column(nullable = false, unique = true)
+    private String eventId; // 멱등 가드(중복 소비 차단). NOT NULL이라야 NULL 다중허용 우회를 막음
     private boolean read;
+    @Column(nullable = false)
     private Instant createdAt;
 
     protected Notification() {
