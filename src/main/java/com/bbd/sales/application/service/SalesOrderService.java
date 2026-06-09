@@ -40,6 +40,9 @@ public class SalesOrderService implements SalesOrderUseCase {
 
     private final SalesOrderRepository repository;
     private final InventoryPort inventoryPort;
+    /**
+     * 서비스는 인터페이스 타입만 앎. 어떤 구현이 들어올 지는 스프링이 런타임에 주입함. (LoggingSalesOrderEventPublisher -> OutboxSalesOrderEventPublisher로 변경)
+     */
     private final SalesOrderEventPublisher eventPublisher;
     private final CatalogPort catalogPort;
     private final ProcurementPort procurementPort;
@@ -128,6 +131,8 @@ public class SalesOrderService implements SalesOrderUseCase {
 
     // ============================ 상태 전이 ============================
 
+
+    /** 헥사고날에서 필요성: 포트만 의존 -> 구현이 뭐든 무관*/
     @Override
     public SalesOrderStatusChangeResult submit(String soNumber, CurrentUser currentUser) {
         SalesOrder so = load(soNumber);
@@ -135,6 +140,9 @@ public class SalesOrderService implements SalesOrderUseCase {
         LocalDateTime now = LocalDateTime.now();
         so.submit(now);                          // REQUESTED 검증은 도메인이
         repository.save(so);
+        // TODO: 현재는 SO id만 보내고 있지만, payload에 풍부한 데이터를 담아야 할 때 (객체상태포함) 데이터를 통째로 스냅샷으로 고정해야함(나중에 조회할때 상태 바뀐 상황 예방)
+        // eventPublisher.publishSubmitted(new SalesOrderSubmittedEvent(
+        //        so.soNumber(), so.requestedBy(), so.lines(), so.status(), now));
         eventPublisher.publishSubmitted(so.soNumber());
         return statusChange(so, currentUser.employeeNumber(), now, null);
     }
@@ -250,6 +258,10 @@ public class SalesOrderService implements SalesOrderUseCase {
      * 미충족 라인(quantity - reservedQuantity)만 재고 예약하고, 라인별 예약결과 + 부족분 소싱(생산/구매) 라우팅을 만든다.
      * approve(confirm)/fulfillBackorder(refulfill) 공통 사용. (음수 방지는 Inventory 의 원자적 차감이 보장)
      */
+    // 아직 부족한 라인만 계산
+    // Inventory에 "이 수량 예약 가능해?" 라고 물음
+    // 예약된 수량은 LineReservation으로 만듦
+    // 부족분 있으면 Catalog의 sourcing type을 보고 MAKE면 생산 요청, 아니면 구매 요청 목록에 넣는다.
     private Routing reserveAndRoute(SalesOrder so) {
         List<StockTransferLine> outstanding = so.lines().stream()
                 .filter(l -> !l.fullyReserved())
@@ -278,6 +290,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         return new Routing(reservations, toProduce, toPurchase);
     }
 
+    // 부족분 업무 라우팅(생산으로 보낼지 구매로 보낼지 나눔)
     private record Routing(List<LineReservation> reservations,
                            List<StockTransferLine> toProduce,
                            List<StockTransferLine> toPurchase) {
