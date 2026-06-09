@@ -67,9 +67,7 @@ public class SalesOrder {
                                      List<SalesOrderLine> lines,
                                      String requesterEmployeeNumber,
                                      LocalDateTime now) {
-        if (lines == null || lines.isEmpty()) {
-            throw new IllegalArgumentException("출고 요청 라인은 최소 1개 이상이어야 합니다.");
-        }
+        validateLines(lines, "출고 요청 라인은 최소 1개 이상이어야 합니다.");
         SalesOrder so = new SalesOrder(soNumber, fromWarehouseCode, fromWarehouseName);
         so.priority = priority == null ? SalesOrderPriority.NORMAL : priority;
         so.note = note;
@@ -131,11 +129,25 @@ public class SalesOrder {
         if (priority != null) this.priority = priority;
         this.note = note;
         if (newLines != null) {
-            if (newLines.isEmpty()) {
-                throw new IllegalArgumentException("라인을 교체할 경우 최소 1개 이상이어야 합니다.");
-            }
+            validateLines(newLines, "라인을 교체할 경우 최소 1개 이상이어야 합니다.");
             this.lines.clear();
             this.lines.addAll(newLines);
+        }
+    }
+
+    private static void validateLines(List<SalesOrderLine> lines, String emptyMessage) {
+        if (lines == null || lines.isEmpty()) {
+            throw new IllegalArgumentException(emptyMessage);
+        }
+
+        Set<String> skus = new HashSet<>();
+        for (SalesOrderLine line : lines) {
+            if (line == null) {
+                throw new IllegalArgumentException("출고 요청 라인 항목은 null 일 수 없습니다.");
+            }
+            if (!skus.add(line.sku())) {
+                throw new IllegalArgumentException("중복된 SKU는 허용되지 않습니다: " + line.sku());
+            }
         }
     }
 
@@ -193,6 +205,7 @@ public class SalesOrder {
 
         List<ReservationApplication> applications = new ArrayList<>();
         Set<String> reservationSkus = new HashSet<>();
+        // 중간에 잘못된 예약이 있을 때 앞 예약만 저장되지 않도록 검증
         for (LineReservation r : reservations) {
             validateReservation(r);
             if (!reservationSkus.add(r.sku())) {
