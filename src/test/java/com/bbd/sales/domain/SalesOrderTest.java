@@ -35,16 +35,19 @@ class SalesOrderTest {
         return so;
     }
 
-    private SalesOrder submittedWithDuplicateSkuLines() {
-        SalesOrder so = SalesOrder.request("SO-2026-0002", "WH-BR-001", "강남지점",
-                SalesOrderPriority.NORMAL, "메모",
-                List.of(
-                        new SalesOrderLine(1, "SKU-1", "볼트", new BigDecimal("100"), 3),
-                        new SalesOrderLine(2, "SKU-1", "볼트", new BigDecimal("100"), 2)
-                ),
-                "EMP-staff", NOW);
-        so.submit(NOW);
-        return so;
+    private List<SalesOrderLine> duplicateSkuLines() {
+        return List.of(
+                new SalesOrderLine(1, "SKU-1", "볼트", new BigDecimal("100"), 3),
+                new SalesOrderLine(2, "SKU-1", "볼트", new BigDecimal("100"), 2)
+        );
+    }
+
+    private SalesOrder submittedWithLegacyDuplicateSkuLines() {
+        return SalesOrder.reconstitute("SO-2026-0002", "WH-BR-001", "강남지점",
+                SalesOrderStatus.SUBMITTED, SalesOrderPriority.NORMAL, "메모",
+                duplicateSkuLines(),
+                "EMP-staff", null, null, null, null, null,
+                NOW, null, null, null, null);
     }
 
     /** 전량 확보(STOCK) 확정 -> IN_FULFILLMENT */
@@ -84,6 +87,15 @@ class SalesOrderTest {
         assertThatThrownBy(() -> SalesOrder.request("SO-X", "WH-BR-001", "강남지점",
                 SalesOrderPriority.NORMAL, null, List.of(), "EMP-staff", NOW))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("생성 시 같은 sku 라인이 중복되면 거부")
+    void request_rejectsDuplicateSkuLines() {
+        assertThatThrownBy(() -> SalesOrder.request("SO-X", "WH-BR-001", "강남지점",
+                SalesOrderPriority.NORMAL, null, duplicateSkuLines(), "EMP-staff", NOW))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("중복된 SKU");
     }
 
     // ---------- 제출/취소 ----------
@@ -210,9 +222,9 @@ class SalesOrderTest {
     }
 
     @Test
-    @DisplayName("confirmByHq: 같은 sku 라인이 여러 개면 예약 매핑이 모호하므로 거부한다")
-    void confirmByHq_duplicateSkuLines_failsWithoutMutation() {
-        SalesOrder so = submittedWithDuplicateSkuLines();
+    @DisplayName("confirmByHq: 복원된 주문에 같은 sku 라인이 여러 개면 예약 매핑이 모호하므로 거부한다")
+    void confirmByHq_legacyDuplicateSkuLines_failsWithoutMutation() {
+        SalesOrder so = submittedWithLegacyDuplicateSkuLines();
 
         assertThatThrownBy(() -> so.confirmByHq("EMP-hq", NOW,
                 List.of(new LineReservation("SKU-1", 3, FulfillmentSource.STOCK))))
@@ -308,6 +320,19 @@ class SalesOrderTest {
     void update_fromSubmitted_fails() {
         SalesOrder so = submitted();
         assertViolation(() -> so.updateContents(SalesOrderPriority.URGENT, "x", null), Violation.NOT_EDITABLE);
+    }
+
+    @Test
+    @DisplayName("updateContents: 라인 교체 시 같은 sku 라인이 중복되면 거부")
+    void update_rejectsDuplicateSkuLines() {
+        SalesOrder so = requested();
+
+        assertThatThrownBy(() -> so.updateContents(SalesOrderPriority.URGENT, "수정", duplicateSkuLines()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("중복된 SKU");
+
+        assertThat(so.lines()).hasSize(1);
+        assertThat(line(so).sku()).isEqualTo("SKU-1");
     }
 
     // ---------- 정상 흐름 ----------

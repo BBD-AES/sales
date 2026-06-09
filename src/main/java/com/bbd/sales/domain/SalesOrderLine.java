@@ -44,7 +44,7 @@ public class SalesOrderLine {
     }
 
     /**
-     * 예약 반영(가산). 이번 라운드 확보분을 더하고, 전량 확보되면 source=STOCK, 아니면 부족분 소스로 기록.
+     * 예약 반영(가산). 이번 라운드 확보분을 더하고(예약수량 초과하지 않음), 전량 확보되면 source=STOCK, 아니면 부족분 소스로 기록.
      */
     public void applyReservation(int reservedDelta, FulfillmentSource shortfallSource) {
         this.reservedQuantity = Math.min(quantity, this.reservedQuantity + Math.max(0, reservedDelta));
