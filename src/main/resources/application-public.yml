@@ -30,6 +30,17 @@ spring:
       mode: always       # data.sql 시드 자동 로드(데모). 끄려면 never
       encoding: UTF-8
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:kafka.inwoohub.com:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: sales-hq-notification
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
 # Swagger
 springdoc:
   swagger-ui:
@@ -37,4 +48,3 @@ springdoc:
     operations-sorter: alpha
     url: /sales/v3/api-docs
     config-url: /sales/v3/api-docs/swagger-config
-

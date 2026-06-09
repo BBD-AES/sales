@@ -21,7 +21,10 @@ public enum ErrorCode {
     SALES_ORDER_NOT_FULFILLABLE(HttpStatus.CONFLICT, "SO010", "BACKORDERED 상태의 출고 요청만 충족 처리할 수 있습니다."),
 
     AUTH_HEADER_REQUIRED(HttpStatus.UNAUTHORIZED, "AUTH001", "인증 헤더가 필요합니다."),
-    AUTH_ROLE_INVALID(HttpStatus.BAD_REQUEST, "AUTH002", "알 수 없는 역할입니다.");
+    AUTH_ROLE_INVALID(HttpStatus.BAD_REQUEST, "AUTH002", "알 수 없는 역할입니다."),
+
+    EVENT_SERIALIZATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "EVT001", "이벤트 직렬화에 실패했습니다.")
+    ;
 
     private final HttpStatus status;
     private final String code;
