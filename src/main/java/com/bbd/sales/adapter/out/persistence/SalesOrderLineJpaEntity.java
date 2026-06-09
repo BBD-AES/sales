@@ -13,7 +13,8 @@ import java.math.BigDecimal;
  * (도메인이 JPA 어노테이션/지연로딩 같은 ORM 사정에 오염되지 않게 하기 위함)
  */
 @Entity
-@Table(name = "sales_order_line")
+@Table(name = "sales_order_line",
+        uniqueConstraints = @UniqueConstraint(name = "uq_sales_order_line", columnNames = {"so_number", "line_no"}))
 @Getter
 @Setter
 @NoArgsConstructor(access = lombok.AccessLevel.PROTECTED)
@@ -24,7 +25,7 @@ public class SalesOrderLineJpaEntity {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "sales_order_id")
+    @JoinColumn(name = "so_number")   // FK -> sales_order.so_number (물리 PK)
     private SalesOrderJpaEntity salesOrder;
 
     private int lineNo;
