@@ -23,8 +23,8 @@ public class SalesOrderPersistenceMapper {
     }
 
     private void applyMutable(SalesOrderJpaEntity entity, SalesOrder so) {
-        entity.setFromWarehouseCode(so.fromWarehouseCode());
-        entity.setFromWarehouseName(so.fromWarehouseName());
+        entity.setToWarehouseCode(so.toWarehouseCode());
+        entity.setToWarehouseName(so.toWarehouseName());
         entity.setStatus(so.status());
         entity.setPriority(so.priority());
         entity.setNote(so.note());
@@ -65,7 +65,7 @@ public class SalesOrderPersistenceMapper {
 
         return SalesOrder.reconstitute(
                 e.getSoNumber(),
-                e.getFromWarehouseCode(), e.getFromWarehouseName(),
+                e.getToWarehouseCode(), e.getToWarehouseName(),
                 e.getStatus(), e.getPriority(), e.getNote(), lines,
                 e.getRequestedBy(), e.getApprovedBy(), e.getRejectedBy(),
                 e.getReceivedBy(), e.getCanceledBy(), e.getRejectedReason(),

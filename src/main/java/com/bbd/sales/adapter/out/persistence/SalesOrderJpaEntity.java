@@ -33,8 +33,8 @@ public class SalesOrderJpaEntity {
     @Column(name = "so_number", nullable = false, updatable = false, unique = true)
     private String soNumber;
 
-    private String fromWarehouseCode;
-    private String fromWarehouseName;   // 생성 시점 스냅샷(DBML 컬럼 from_warehouse_name)
+    private String toWarehouseCode;
+    private String toWarehouseName;   // 생성 시점 스냅샷(DBML 컬럼 to_warehouse_name)
 
     @Enumerated(EnumType.STRING)
     private SalesOrderStatus status;

@@ -21,7 +21,7 @@ public interface InventoryPort {
      * 수령 확정 시 실재고 이동.
      * 출발지(source)는 sales 가 모른다 -> Inventory 가 soNumber 의 할당/예약 기록으로 해석한다.
      * @param soNumber                 출고 요청 번호(할당 기록 키)
-     * @param destinationWarehouseCode 도착 창고(=지점, fromWarehouseCode)
+     * @param destinationWarehouseCode 도착 창고(=지점, toWarehouseCode)
      * @param issuerId                 처리자 사번
      * @param lines                    이동 라인
      */

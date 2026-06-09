@@ -10,8 +10,8 @@ import java.util.List;
 /** 상세 응답. */
 public record SalesOrderDetailResponse(
         String soNumber,
-        String fromWarehouseCode,
-        String fromWarehouseName,
+        String toWarehouseCode,
+        String toWarehouseName,
         SalesOrderStatus status,
         SalesOrderPriority priority,
         String requestedBy,

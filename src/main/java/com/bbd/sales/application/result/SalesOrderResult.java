@@ -10,8 +10,8 @@ import java.util.List;
 /** 상세 결과. (이전엔 web 의 SalesOrderLineResponse 를 import 했었음 -> SalesOrderLineResult 로 교정) */
 public record SalesOrderResult(
         String soNumber,
-        String fromWarehouseCode,
-        String fromWarehouseName,
+        String toWarehouseCode,
+        String toWarehouseName,
         SalesOrderStatus status,
         SalesOrderPriority priority,
         String requestedBy,

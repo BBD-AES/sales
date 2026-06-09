@@ -5,27 +5,27 @@
 -- spring.sql.init.mode=always + spring.jpa.defer-datasource-initialization=true 와 함께 기동 시 실행.
 -- 주의: 기존에 옛 시드(옛 상태값)가 이미 있으면 DO NOTHING 이라 안 덮음 -> 정렬하려면 두 테이블 TRUNCATE 후 재기동.
 
-INSERT INTO sales_order (version, so_number, from_warehouse_code, from_warehouse_name, status, priority, note, requested_by, approved_by, received_by, requested_at, approved_at, received_at)
+INSERT INTO sales_order (version, so_number, to_warehouse_code, to_warehouse_name, status, priority, note, requested_by, approved_by, received_by, requested_at, approved_at, received_at)
 VALUES (0, 'SO-2026-0001', 'WH-BR-001', '강남 1지점', 'RECEIVED', 'NORMAL', '정상 도착 완료', 'BR003', 'HQ001', 'BR003', '2026-04-20 09:00:00', '2026-04-21 09:00:00', '2026-04-22 09:00:00')
 ON CONFLICT (so_number) DO NOTHING;
 
-INSERT INTO sales_order (version, so_number, from_warehouse_code, from_warehouse_name, status, priority, note, requested_by, approved_by, requested_at, approved_at)
+INSERT INTO sales_order (version, so_number, to_warehouse_code, to_warehouse_name, status, priority, note, requested_by, approved_by, requested_at, approved_at)
 VALUES (0, 'SO-2026-0002', 'WH-BR-001', '강남 1지점', 'IN_FULFILLMENT', 'NORMAL', '출고 진행 중', 'BR003', 'HQ001', '2026-05-15 09:00:00', '2026-05-16 09:00:00')
 ON CONFLICT (so_number) DO NOTHING;
 
-INSERT INTO sales_order (version, so_number, from_warehouse_code, from_warehouse_name, status, priority, note, requested_by, requested_at)
+INSERT INTO sales_order (version, so_number, to_warehouse_code, to_warehouse_name, status, priority, note, requested_by, requested_at)
 VALUES (0, 'SO-2026-0003', 'WH-BR-002', '분당 1지점', 'SUBMITTED', 'URGENT', '본사 검토 대기', 'BR002', '2026-05-22 09:00:00')
 ON CONFLICT (so_number) DO NOTHING;
 
-INSERT INTO sales_order (version, so_number, from_warehouse_code, from_warehouse_name, status, priority, note, requested_by, approved_by, requested_at, approved_at)
+INSERT INTO sales_order (version, so_number, to_warehouse_code, to_warehouse_name, status, priority, note, requested_by, approved_by, requested_at, approved_at)
 VALUES (0, 'SO-2026-0004', 'WH-BR-003', '부산 1지점', 'BACKORDERED', 'NORMAL', '릴레이 무재고 -> 구매요청(PR) 대기', 'BR003', 'HQ001', '2026-05-23 09:00:00', '2026-05-24 09:00:00')
 ON CONFLICT (so_number) DO NOTHING;
 
-INSERT INTO sales_order (version, so_number, from_warehouse_code, from_warehouse_name, status, priority, note, requested_by, rejected_by, rejected_reason, requested_at, rejected_at)
+INSERT INTO sales_order (version, so_number, to_warehouse_code, to_warehouse_name, status, priority, note, requested_by, rejected_by, rejected_reason, requested_at, rejected_at)
 VALUES (0, 'SO-2026-0005', 'WH-BR-001', '강남 1지점', 'REJECTED', 'NORMAL', '반려 예시', 'BR003', 'HQ001', '예산 한도 초과', '2026-05-24 09:00:00', '2026-05-25 09:00:00')
 ON CONFLICT (so_number) DO NOTHING;
 
-INSERT INTO sales_order (version, so_number, from_warehouse_code, from_warehouse_name, status, priority, note, requested_by, requested_at)
+INSERT INTO sales_order (version, so_number, to_warehouse_code, to_warehouse_name, status, priority, note, requested_by, requested_at)
 VALUES (0, 'SO-2026-0006', 'WH-BR-004', '대구 1지점', 'REQUESTED', 'NORMAL', '지점 작성 중', 'BR004', '2026-05-25 09:00:00')
 ON CONFLICT (so_number) DO NOTHING;
 

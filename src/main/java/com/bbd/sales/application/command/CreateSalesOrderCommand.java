@@ -10,7 +10,7 @@ import java.util.List;
  * (CreateSalesOrderRequest 같은 어댑터 타입을 application 이 직접 참조하지 않게 하는 경계 역할)
  */
 public record CreateSalesOrderCommand(
-        String fromWarehouseCode,
+        String toWarehouseCode,
         SalesOrderPriority priority,
         String note,
         List<SalesOrderLineCommand> lines,

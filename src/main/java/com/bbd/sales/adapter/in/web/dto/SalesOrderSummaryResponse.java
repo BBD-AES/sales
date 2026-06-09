@@ -9,8 +9,8 @@ import java.time.LocalDateTime;
 /** 목록 item 응답. */
 public record SalesOrderSummaryResponse(
         String soNumber,
-        String fromWarehouseCode,
-        String fromWarehouseName,
+        String toWarehouseCode,
+        String toWarehouseName,
         SalesOrderStatus status,
         SalesOrderPriority priority,
         String requestedBy,
