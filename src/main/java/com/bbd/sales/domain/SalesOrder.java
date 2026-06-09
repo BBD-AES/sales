@@ -216,7 +216,7 @@ public class SalesOrder {
 
         for (ReservationApplication application : applications) {
             LineReservation r = application.reservation();
-            application.line().applyReservation(r.reserved(), r.source());
+            application.line().applyReservation(r.reserved(), r.source(), r.sourceWarehouseCode());
         }
     }
 

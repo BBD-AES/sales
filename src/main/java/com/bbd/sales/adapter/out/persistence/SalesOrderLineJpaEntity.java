@@ -40,6 +40,8 @@ public class SalesOrderLineJpaEntity {
     @Enumerated(EnumType.STRING)
     private FulfillmentSource fulfillmentSource;
 
+    private String fromWarehouseCode;   // 출발지(출고창고)=소스. confirm 시 라인별 기록, 전 null
+
     public SalesOrderLineJpaEntity(int lineNo, String sku, String nameSnapshot,
                                    BigDecimal unitPriceSnapshot, int quantity) {
         this.lineNo = lineNo;

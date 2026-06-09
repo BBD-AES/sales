@@ -22,6 +22,7 @@ public class SalesOrderLine {
     // 라인레벨 충족추적: 재고 확보분 + 부족분 소스(confirm 에서 채워짐).
     private int reservedQuantity = 0;
     private FulfillmentSource fulfillmentSource;   // null = 미확정(confirm 전)
+    private String fromWarehouseCode;              // 출발지(출고창고)=소스. confirm 시 재고 확보분에 기록, 전 null
 
     public SalesOrderLine(int lineNo, String sku, String nameSnapshot,
                           BigDecimal unitPriceSnapshot, int quantity) {
@@ -46,9 +47,12 @@ public class SalesOrderLine {
     /**
      * 예약 반영(가산). 이번 라운드 확보분을 더하고(예약수량 초과하지 않음), 전량 확보되면 source=STOCK, 아니면 부족분 소스로 기록.
      */
-    public void applyReservation(int reservedDelta, FulfillmentSource shortfallSource) {
+    public void applyReservation(int reservedDelta, FulfillmentSource shortfallSource, String sourceWarehouseCode) {
         this.reservedQuantity = Math.min(quantity, this.reservedQuantity + Math.max(0, reservedDelta));
         this.fulfillmentSource = (this.reservedQuantity >= quantity) ? FulfillmentSource.STOCK : shortfallSource;
+        if (sourceWarehouseCode != null) {
+            this.fromWarehouseCode = sourceWarehouseCode;   // 재고 확보분의 출발지(출고창고) 기록
+        }
     }
 
     public boolean fullyReserved() { return reservedQuantity >= quantity; }
@@ -61,4 +65,5 @@ public class SalesOrderLine {
     public int quantity() { return quantity; }
     public int reservedQuantity() { return reservedQuantity; }
     public FulfillmentSource fulfillmentSource() { return fulfillmentSource; }
+    public String fromWarehouseCode() { return fromWarehouseCode; }
 }

@@ -285,7 +285,7 @@ public class SalesOrderService implements SalesOrderUseCase {
                     toPurchase.add(new StockTransferLine(r.sku(), stillShort));
                 }
             }
-            reservations.add(new LineReservation(r.sku(), r.reserved(), source));
+            reservations.add(new LineReservation(r.sku(), r.reserved(), source, r.sourceWarehouseCode()));
         }
         return new Routing(reservations, toProduce, toPurchase);
     }
@@ -358,7 +358,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         List<SalesOrderLineResult> lines = so.lines().stream()
                 .map(l -> new SalesOrderLineResult(
                         l.lineNo(), l.sku(), l.nameSnapshot(), l.unitPriceSnapshot(), l.quantity(),
-                        l.reservedQuantity(), l.fulfillmentSource()))
+                        l.reservedQuantity(), l.fulfillmentSource(), l.fromWarehouseCode()))
                 .toList();
         return new SalesOrderResult(
                 so.soNumber(),
