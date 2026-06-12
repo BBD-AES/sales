@@ -1,4 +1,14 @@
 package com.bbd.sales.adapter.in.web.dto;
 
-public record CustomerOrderSummaryResponse() {
+import com.bbd.sales.domain.CustomerOrderStatus;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+public record CustomerOrderSummaryResponse(
+        String coNumber, String dealerWarehouseName, String dealerName, String customerName, CustomerOrderStatus status,
+        String requestedBy, String confirmedBy, String canceledBy, String closedBy,
+        LocalDateTime requestedAt, LocalDateTime confirmedAt, LocalDateTime canceledAt, LocalDateTime closedAt,
+        BigDecimal totalAmount, String note
+) {
 }
