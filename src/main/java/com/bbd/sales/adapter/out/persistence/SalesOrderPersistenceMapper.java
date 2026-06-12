@@ -14,15 +14,11 @@ public class SalesOrderPersistenceMapper {
     public SalesOrderJpaEntity toNewEntity(SalesOrder so) {
         SalesOrderJpaEntity entity = new SalesOrderJpaEntity();
         entity.setSoNumber(so.soNumber());
-        applyMutable(entity, so);
+        applyTo(entity, so);
         return entity;
     }
 
     public void applyTo(SalesOrderJpaEntity entity, SalesOrder so) {
-        applyMutable(entity, so);
-    }
-
-    private void applyMutable(SalesOrderJpaEntity entity, SalesOrder so) {
         entity.setToWarehouseCode(so.toWarehouseCode());
         entity.setToWarehouseName(so.toWarehouseName());
         entity.setStatus(so.status());
