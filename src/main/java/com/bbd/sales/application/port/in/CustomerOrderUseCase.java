@@ -1,4 +1,4 @@
-package com.bbd.sales.application.port.out;
+package com.bbd.sales.application.port.in;
 
 import com.bbd.sales.application.command.CreateCustomerOrderCommand;
 import com.bbd.sales.application.command.SearchCustomerOrderQuery;

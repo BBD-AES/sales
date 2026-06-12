@@ -1,4 +1,11 @@
 package com.bbd.sales.application.port.out;
 
-public class CustomerOrderSearchCriteria {
+import com.bbd.sales.domain.CustomerOrderStatus;
+
+import java.time.LocalDateTime;
+
+public record CustomerOrderSearchCriteria(
+        CustomerOrderStatus status, String dealerWarehouseCode, String customerName,
+        String requestedBy, LocalDateTime from, LocalDateTime to
+) {
 }
