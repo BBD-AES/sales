@@ -31,7 +31,9 @@ public class InventoryStubAdapter implements InventoryPort {
         List<ReservationResult> results = lines.stream()
                 .map(l -> {
                     int available = DEMO_AVAILABLE.getOrDefault(l.sku(), l.quantity()); // 미등록 SKU=전량 가용
-                    return new ReservationResult(l.sku(), l.quantity(), Math.min(l.quantity(), available));
+                    int reserved = Math.min(l.quantity(), available);
+                    String source = reserved > 0 ? "WH-HQ-001" : null;   // 데모: 본사 중앙창고에서 출고(출발지)
+                    return new ReservationResult(l.sku(), l.quantity(), reserved, source);
                 })
                 .toList();
         log.info("[InventoryStub] 재고 예약(데모) so={}, dest={}, 결과={}", soNumber, destinationWarehouseCode, results);

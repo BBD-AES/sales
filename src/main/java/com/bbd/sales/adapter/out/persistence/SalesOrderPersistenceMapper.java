@@ -14,17 +14,13 @@ public class SalesOrderPersistenceMapper {
     public SalesOrderJpaEntity toNewEntity(SalesOrder so) {
         SalesOrderJpaEntity entity = new SalesOrderJpaEntity();
         entity.setSoNumber(so.soNumber());
-        applyMutable(entity, so);
+        applyTo(entity, so);
         return entity;
     }
 
     public void applyTo(SalesOrderJpaEntity entity, SalesOrder so) {
-        applyMutable(entity, so);
-    }
-
-    private void applyMutable(SalesOrderJpaEntity entity, SalesOrder so) {
-        entity.setFromWarehouseCode(so.fromWarehouseCode());
-        entity.setFromWarehouseName(so.fromWarehouseName());
+        entity.setToWarehouseCode(so.toWarehouseCode());
+        entity.setToWarehouseName(so.toWarehouseName());
         entity.setStatus(so.status());
         entity.setPriority(so.priority());
         entity.setNote(so.note());
@@ -46,6 +42,7 @@ public class SalesOrderPersistenceMapper {
                             l.lineNo(), l.sku(), l.nameSnapshot(), l.unitPriceSnapshot(), l.quantity());
                     le.setReservedQuantity(l.reservedQuantity());
                     le.setFulfillmentSource(l.fulfillmentSource());
+                    le.setFromWarehouseCode(l.fromWarehouseCode());
                     return le;
                 })
                 .toList();
@@ -58,14 +55,14 @@ public class SalesOrderPersistenceMapper {
                 .map(l -> {
                     SalesOrderLine line = new SalesOrderLine(
                             l.getLineNo(), l.getSku(), l.getNameSnapshot(), l.getUnitPriceSnapshot(), l.getQuantity());
-                    line.applyReservation(l.getReservedQuantity(), l.getFulfillmentSource());  // 저장 상태 복원
+                    line.applyReservation(l.getReservedQuantity(), l.getFulfillmentSource(), l.getFromWarehouseCode());  // 저장 상태 복원
                     return line;
                 })
                 .toList();
 
         return SalesOrder.reconstitute(
                 e.getSoNumber(),
-                e.getFromWarehouseCode(), e.getFromWarehouseName(),
+                e.getToWarehouseCode(), e.getToWarehouseName(),
                 e.getStatus(), e.getPriority(), e.getNote(), lines,
                 e.getRequestedBy(), e.getApprovedBy(), e.getRejectedBy(),
                 e.getReceivedBy(), e.getCanceledBy(), e.getRejectedReason(),

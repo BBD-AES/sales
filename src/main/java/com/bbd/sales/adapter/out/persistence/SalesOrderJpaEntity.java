@@ -23,18 +23,16 @@ import java.util.List;
 @NoArgsConstructor(access = lombok.AccessLevel.PROTECTED)
 public class SalesOrderJpaEntity {
 
+    // 물리 PK = so_number(업무 식별자). surrogate id 제거(팀 결정: id = so_number).
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @Column(name = "so_number", nullable = false, updatable = false)
+    private String soNumber;
 
     @Version
     private Long version;
 
-    @Column(name = "so_number", nullable = false, updatable = false, unique = true)
-    private String soNumber;
-
-    private String fromWarehouseCode;
-    private String fromWarehouseName;   // 생성 시점 스냅샷(DBML 컬럼 from_warehouse_name)
+    private String toWarehouseCode;
+    private String toWarehouseName;   // 생성 시점 스냅샷(DBML 컬럼 to_warehouse_name)
 
     @Enumerated(EnumType.STRING)
     private SalesOrderStatus status;

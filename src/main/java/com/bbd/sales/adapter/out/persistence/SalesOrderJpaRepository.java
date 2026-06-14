@@ -9,7 +9,7 @@ import java.util.Optional;
 
 /** Spring Data JPA 리포지토리(영속 기술 세부). 포트가 아니라 어댑터 내부 도구. */
 public interface SalesOrderJpaRepository
-        extends JpaRepository<SalesOrderJpaEntity, Long>,
+        extends JpaRepository<SalesOrderJpaEntity, String>,
         JpaSpecificationExecutor<SalesOrderJpaEntity> {
 
     Optional<SalesOrderJpaEntity> findBySoNumber(String soNumber);

@@ -1,5 +1,6 @@
 package com.bbd.sales.global.error;
 
+import com.bbd.sales.domain.CustomerOrderStateException;
 import com.bbd.sales.domain.SalesOrderStateException;
 import com.bbd.sales.global.error.dto.ErrorCode;
 import org.springframework.http.HttpStatus;
@@ -34,6 +35,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             case NOT_RECEIVABLE -> ErrorCode.SALES_ORDER_NOT_RECEIVABLE;
             case NOT_FULFILLABLE -> ErrorCode.SALES_ORDER_NOT_FULFILLABLE;
             case REJECT_REASON_REQUIRED -> ErrorCode.SALES_ORDER_REJECT_REASON_REQUIRED;
+        };
+        ApiException mapped = new ApiException(code);
+        return ResponseEntity.status(mapped.getStatusCode()).body(mapped.getBody());
+    }
+
+    @ExceptionHandler(CustomerOrderStateException.class)
+    public ResponseEntity<ProblemDetail> handleCustomerOrderState(CustomerOrderStateException e) {
+        ErrorCode code = switch (e.violation()) {
+            case NOT_EDITABLE -> ErrorCode.CUSTOMER_ORDER_NOT_EDITABLE;
+            case NOT_CONFIRMABLE -> ErrorCode.CUSTOMER_ORDER_NOT_CONFIRMABLE;
+            case NOT_CANCELABLE -> ErrorCode.CUSTOMER_ORDER_NOT_CANCELABLE;
+            case NOT_CLOSABLE -> ErrorCode.CUSTOMER_ORDER_NOT_CLOSABLE;
         };
         ApiException mapped = new ApiException(code);
         return ResponseEntity.status(mapped.getStatusCode()).body(mapped.getBody());

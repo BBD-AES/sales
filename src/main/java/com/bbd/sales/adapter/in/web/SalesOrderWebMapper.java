@@ -27,17 +27,17 @@ public class SalesOrderWebMapper {
 
     public SearchSalesOrderQuery toSearchQuery(
             SalesOrderStatus status, SalesOrderPriority priority,
-            String fromWarehouseCode, String requestedBy,
+            String toWarehouseCode, String requestedBy,
             LocalDate startDate, LocalDate endDate,
             int page, int size, CurrentUser currentUser) {
         return new SearchSalesOrderQuery(
-                status, priority, fromWarehouseCode, requestedBy,
+                status, priority, toWarehouseCode, requestedBy,
                 startDate, endDate, page, size, currentUser);
     }
 
     public CreateSalesOrderCommand toCreateCommand(CreateSalesOrderRequest req, CurrentUser currentUser) {
         return new CreateSalesOrderCommand(
-                req.fromWarehouseCode(),
+                req.toWarehouseCode(),
                 req.priority(),
                 req.note(),
                 toLineCommands(req.lines()),
@@ -75,7 +75,7 @@ public class SalesOrderWebMapper {
     public SalesOrderDetailResponse toDetailResponse(SalesOrderResult r) {
         return new SalesOrderDetailResponse(
                 r.soNumber(),
-                r.fromWarehouseCode(), r.fromWarehouseName(),
+                r.toWarehouseCode(), r.toWarehouseName(),
                 r.status(), r.priority(),
                 r.requestedBy(), r.approvedBy(), r.receivedBy(), r.canceledBy(),
                 r.requestedAt(), r.approvedAt(), r.receivedAt(), r.canceledAt(),
@@ -91,7 +91,7 @@ public class SalesOrderWebMapper {
     private SalesOrderSummaryResponse toSummaryResponse(SalesOrderSummaryResult r) {
         return new SalesOrderSummaryResponse(
                 r.soNumber(),
-                r.fromWarehouseCode(), r.fromWarehouseName(),
+                r.toWarehouseCode(), r.toWarehouseName(),
                 r.status(), r.priority(),
                 r.requestedBy(), r.approvedBy(), r.receivedBy(), r.canceledBy(),
                 r.requestedAt(), r.approvedAt(), r.receivedAt(), r.canceledAt(),
@@ -101,6 +101,6 @@ public class SalesOrderWebMapper {
     private SalesOrderLineResponse toLineResponse(SalesOrderLineResult r) {
         return new SalesOrderLineResponse(
                 r.lineNo(), r.sku(), r.nameSnapshot(), r.unitPriceSnapshot(), r.quantity(),
-                r.reservedQuantity(), r.fulfillmentSource());
+                r.reservedQuantity(), r.fulfillmentSource(), r.fromWarehouseCode());
     }
 }

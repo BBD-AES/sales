@@ -55,7 +55,7 @@ public class SalesOrderService implements SalesOrderUseCase {
     public SalesOrderPageResult<SalesOrderSummaryResult> search(SearchSalesOrderQuery query) {
         // 지점 사용자는 본인 창고만. 본사/관리자는 필터 그대로.
         // 비-HQ인데 warehouseCode가 없으면(헤더 누락 등) fromScope가 null로 풀려 전체가 노출되므로 차단.
-        String fromScope = query.fromWarehouseCode();
+        String fromScope = query.toWarehouseCode();
         if (!query.currentUser().isHq()) {
             String warehouseCode = query.currentUser().warehouseCode();
             if (warehouseCode == null || warehouseCode.isBlank()) {
@@ -92,7 +92,7 @@ public class SalesOrderService implements SalesOrderUseCase {
     @Override
     public SalesOrderResult create(CreateSalesOrderCommand command) {
         CurrentUser user = command.currentUser();
-        if (!user.isAdmin() && !command.fromWarehouseCode().equals(user.warehouseCode())) {
+        if (!user.isAdmin() && !(user.isBranchUser() && command.toWarehouseCode().equals(user.warehouseCode()))) {
             throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
         }
 
@@ -101,11 +101,11 @@ public class SalesOrderService implements SalesOrderUseCase {
 
         // 창고명 스냅샷: 생성 시점에 한 번만 조회해 박는다(이후 읽기는 원격 호출 0).
         // 출발지(source)는 sales 가 저장하지 않음 -> HQ/충족 단계가 결정.
-        String fromName = catalogPort.warehouseName(command.fromWarehouseCode());
+        String fromName = catalogPort.warehouseName(command.toWarehouseCode());
 
         SalesOrder so = SalesOrder.request(
                 soNumber,
-                command.fromWarehouseCode(), fromName,
+                command.toWarehouseCode(), fromName,
                 command.priority(), command.note(), lines,
                 user.employeeNumber(), LocalDateTime.now());
 
@@ -169,9 +169,9 @@ public class SalesOrderService implements SalesOrderUseCase {
 
         // 부족분 소싱 요청: BUY -> 구매요청(PR), MAKE -> 생산요청.
         if (!routing.toPurchase().isEmpty())
-            procurementPort.requestPurchase(so.soNumber(), so.fromWarehouseCode(), routing.toPurchase());
+            procurementPort.requestPurchase(so.soNumber(), so.toWarehouseCode(), routing.toPurchase());
         if (!routing.toProduce().isEmpty())
-            productionPort.requestProduction(so.soNumber(), so.fromWarehouseCode(), routing.toProduce());
+            productionPort.requestProduction(so.soNumber(), so.toWarehouseCode(), routing.toProduce());
 
         if (so.status() == SalesOrderStatus.IN_FULFILLMENT) eventPublisher.publishFulfilling(so.soNumber());
         else eventPublisher.publishBackordered(so.soNumber());
@@ -220,7 +220,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         // 유일하게 실재고가 움직이는 지점. destination=지점(from); source 는 Inventory 가 soNumber 로 해석.
         // 정합성: Inventory 호출 실패 시 이 트랜잭션이 롤백되어 수령도 취소됨(동기 호출 결속).
         inventoryPort.transferForSalesOrderReceive(
-                so.soNumber(), so.fromWarehouseCode(),
+                so.soNumber(), so.toWarehouseCode(),
                 currentUser.employeeNumber(), toTransferLines(so));
 
         eventPublisher.publishReceived(so.soNumber());
@@ -267,7 +267,7 @@ public class SalesOrderService implements SalesOrderUseCase {
                 .filter(l -> !l.fullyReserved())
                 .map(l -> new StockTransferLine(l.sku(), l.shortfall()))
                 .toList();
-        List<ReservationResult> results = inventoryPort.reserve(so.soNumber(), so.fromWarehouseCode(), outstanding);
+        List<ReservationResult> results = inventoryPort.reserve(so.soNumber(), so.toWarehouseCode(), outstanding);
 
         List<LineReservation> reservations = new ArrayList<>();
         List<StockTransferLine> toProduce = new ArrayList<>();
@@ -285,7 +285,7 @@ public class SalesOrderService implements SalesOrderUseCase {
                     toPurchase.add(new StockTransferLine(r.sku(), stillShort));
                 }
             }
-            reservations.add(new LineReservation(r.sku(), r.reserved(), source));
+            reservations.add(new LineReservation(r.sku(), r.reserved(), source, r.sourceWarehouseCode()));
         }
         return new Routing(reservations, toProduce, toPurchase);
     }
@@ -358,11 +358,11 @@ public class SalesOrderService implements SalesOrderUseCase {
         List<SalesOrderLineResult> lines = so.lines().stream()
                 .map(l -> new SalesOrderLineResult(
                         l.lineNo(), l.sku(), l.nameSnapshot(), l.unitPriceSnapshot(), l.quantity(),
-                        l.reservedQuantity(), l.fulfillmentSource()))
+                        l.reservedQuantity(), l.fulfillmentSource(), l.fromWarehouseCode()))
                 .toList();
         return new SalesOrderResult(
                 so.soNumber(),
-                so.fromWarehouseCode(), so.fromWarehouseName(),
+                so.toWarehouseCode(), so.toWarehouseName(),
                 so.status(), so.priority(),
                 so.requestedBy(), so.approvedBy(), so.receivedBy(), so.canceledBy(),
                 so.requestedAt(), so.approvedAt(), so.receivedAt(), so.canceledAt(),
@@ -373,7 +373,7 @@ public class SalesOrderService implements SalesOrderUseCase {
     private SalesOrderSummaryResult toSummary(SalesOrder so) {
         return new SalesOrderSummaryResult(
                 so.soNumber(),
-                so.fromWarehouseCode(), so.fromWarehouseName(),
+                so.toWarehouseCode(), so.toWarehouseName(),
                 so.status(), so.priority(),
                 so.requestedBy(), so.approvedBy(), so.receivedBy(), so.canceledBy(),
                 so.requestedAt(), so.approvedAt(), so.receivedAt(), so.canceledAt(),

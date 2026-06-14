@@ -17,11 +17,11 @@ import java.util.Set;
  *  - @Transactional 도 붙이지 않는다. 트랜잭션 경계는 application.service.SalesOrderService 가 잡고,
  *    이 객체는 그 트랜잭션 안에서 상태 전이 규칙만 수행하는 순수 도메인 모델이다.
  *
- * 창고: from=요청 지점(목적지)만 sales 가 보유한다. 출발지(source)는 HQ/충족 단계가
- *  재고 상황을 보고 결정하므로 sales 가 저장하지 않는다(과거 to_warehouse_* 제거).
+ * 창고: to=요청 지점(목적지)만 sales 가 헤더에 보유한다(팀 합의: to=지점). 출발지(source)는
+ *  HQ/충족 단계가 재고 상황을 보고 라인별로 결정하므로 헤더엔 두지 않는다.
  *  => 수령 시 실재고 이동의 source 는 Inventory 가 soNumber 의 할당 기록으로 해석한다.
  *
- * 창고명(fromWarehouseName)은 '생성 시점 스냅샷'으로 보관한다.
+ * 창고명(toWarehouseName)은 '생성 시점 스냅샷'으로 보관한다.
  *  MSA(DB-per-service)라 창고 마스터는 Inventory 서비스 소유 -> 조회마다 원격 호출하면
  *  목록 한 페이지에 행 수만큼 호출이 터진다. 생성 때 한 번 박아두면 읽기는 호출 0,
  *  창고명이 후에 바뀌어도 거래문서의 과거 이름이 보존된다(단가·상품명 스냅샷과 동일 논리).
@@ -29,8 +29,8 @@ import java.util.Set;
 public class SalesOrder {
 
     private final String soNumber;            // 업무 식별자(도메인 정체성). DB PK 는 도메인이 모른다.
-    private final String fromWarehouseCode;   // 지점(목적지)
-    private final String fromWarehouseName;   // 생성 시점 스냅샷
+    private final String toWarehouseCode;   // 지점(목적지)
+    private final String toWarehouseName;   // 생성 시점 스냅샷
 
     private SalesOrderStatus status;
     private SalesOrderPriority priority;
@@ -53,22 +53,22 @@ public class SalesOrder {
     private LocalDateTime canceledAt;
 
     private SalesOrder(String soNumber,
-                       String fromWarehouseCode, String fromWarehouseName) {
+                       String toWarehouseCode, String toWarehouseName) {
         this.soNumber = soNumber;
-        this.fromWarehouseCode = fromWarehouseCode;
-        this.fromWarehouseName = fromWarehouseName;
+        this.toWarehouseCode = toWarehouseCode;
+        this.toWarehouseName = toWarehouseName;
     }
 
     /** 신규 출고 요청 생성(팩토리). 생성과 동시에 REQUESTED. 스냅샷(상품/창고명)은 서비스가 채워 넘김. */
     public static SalesOrder request(String soNumber,
-                                     String fromWarehouseCode, String fromWarehouseName,
+                                     String toWarehouseCode, String toWarehouseName,
                                      SalesOrderPriority priority,
                                      String note,
                                      List<SalesOrderLine> lines,
                                      String requesterEmployeeNumber,
                                      LocalDateTime now) {
         validateLines(lines, "출고 요청 라인은 최소 1개 이상이어야 합니다.");
-        SalesOrder so = new SalesOrder(soNumber, fromWarehouseCode, fromWarehouseName);
+        SalesOrder so = new SalesOrder(soNumber, toWarehouseCode, toWarehouseName);
         so.priority = priority == null ? SalesOrderPriority.NORMAL : priority;
         so.note = note;
         so.lines.addAll(lines);
@@ -80,14 +80,14 @@ public class SalesOrder {
 
     /** 영속 계층에서 읽어온 값으로 도메인 객체를 무검증 복원(persistence 매퍼 전용). */
     public static SalesOrder reconstitute(String soNumber,
-                                          String fromWarehouseCode, String fromWarehouseName,
+                                          String toWarehouseCode, String toWarehouseName,
                                           SalesOrderStatus status, SalesOrderPriority priority, String note,
                                           List<SalesOrderLine> lines,
                                           String requestedBy, String approvedBy, String rejectedBy,
                                           String receivedBy, String canceledBy, String rejectedReason,
                                           LocalDateTime requestedAt, LocalDateTime approvedAt, LocalDateTime rejectedAt,
                                           LocalDateTime receivedAt, LocalDateTime canceledAt) {
-        SalesOrder so = new SalesOrder(soNumber, fromWarehouseCode, fromWarehouseName);
+        SalesOrder so = new SalesOrder(soNumber, toWarehouseCode, toWarehouseName);
         so.status = status;
         so.priority = priority;
         so.note = note;
@@ -216,7 +216,7 @@ public class SalesOrder {
 
         for (ReservationApplication application : applications) {
             LineReservation r = application.reservation();
-            application.line().applyReservation(r.reserved(), r.source());
+            application.line().applyReservation(r.reserved(), r.source(), r.sourceWarehouseCode());
         }
     }
 
@@ -291,13 +291,13 @@ public class SalesOrder {
 
     /** 본인 소속 창고(요청 지점) 자원인지 판단 키. */
     public boolean ownedByWarehouse(String warehouseCode) {
-        return fromWarehouseCode.equals(warehouseCode);
+        return toWarehouseCode.equals(warehouseCode);
     }
 
     // --- 조회용 getter (불변 노출) ---
     public String soNumber() { return soNumber; }
-    public String fromWarehouseCode() { return fromWarehouseCode; }
-    public String fromWarehouseName() { return fromWarehouseName; }
+    public String toWarehouseCode() { return toWarehouseCode; }
+    public String toWarehouseName() { return toWarehouseName; }
     public SalesOrderStatus status() { return status; }
     public SalesOrderPriority priority() { return priority; }
     public String note() { return note; }
