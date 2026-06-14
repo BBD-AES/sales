@@ -103,7 +103,7 @@ public class CustomerOrder {
         Set<String> skus = new HashSet<>();
         for (CustomerOrderLine line : lines) {
             if (line == null) throw new IllegalArgumentException("수주 라인은 null일 수 없습니다.");
-            if (!skus.add(line.sku())) throw new IllegalArgumentException("중복된 SKU는 허용되지 않습니다." + line.sku());
+            if (!skus.add(line.sku())) throw new IllegalArgumentException("중복된 SKU는 허용되지 않습니다: " + line.sku());
         }
     }
 

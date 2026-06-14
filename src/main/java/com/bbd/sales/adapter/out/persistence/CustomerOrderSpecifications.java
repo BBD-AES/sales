@@ -26,7 +26,10 @@ public class CustomerOrderSpecifications {
                 predicates.add(criteriaBuilder.like(root.get("customerName"), "%" + c.customerName() + "%"));
             if (c.requestedBy() != null)
                 predicates.add(criteriaBuilder.equal(root.get("requestedBy"), c.requestedBy()));
-            if (c.from() != null) predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get("requestedAt"), c.to()));
+            if (c.from() != null)
+                predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get("requestedAt"), c.from()));
+            if (c.to() != null)
+                predicates.add(criteriaBuilder.lessThanOrEqualTo(root.get("requestedAt"), c.to()));
 
             // predicates list를 array로 바꿈(cb.and()가 list를 못 읽어서)
             // 규칙으로서 빈 배열(new Predicate[0])을 주고 크기는 자바가 알아서 늘려서 맞춤.(메모리 절약)

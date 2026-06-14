@@ -26,11 +26,11 @@ public enum ErrorCode {
     EVENT_SERIALIZATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "EVT001", "이벤트 직렬화에 실패했습니다."),
 
     CUSTOMER_ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "CO001", "수주를 찾을 수 없습니다."),
-    CUSTOMER_ORDER_NOT_EDITABLE(HttpStatus.NOT_FOUND, "CO002", "RECEIVED 상태의 수주만 수정할 수 있습니다."),
-    CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE(HttpStatus.NOT_FOUND, "CO003", "본인 소속 지점의 수주만 접근할 수 있습니다."),
-    CUSTOMER_ORDER_NOT_CONFIRMABLE(HttpStatus.NOT_FOUND, "CO004", "RECEIVED 상태의 수주만 확정할 수 있습니다."),
-    CUSTOMER_ORDER_NOT_CANCELABLE(HttpStatus.NOT_FOUND, "CO005", "RECEIVED 또는 CONFIRMED 상태에서만 취소할 수 있습니다."),
-    CUSTOMER_ORDER_NOT_CLOSABLE(HttpStatus.NOT_FOUND, "CO006", "CONFIRMED 상태의 수주만 종료할 수 있습니다."),
+    CUSTOMER_ORDER_NOT_EDITABLE(HttpStatus.CONFLICT, "CO002", "OPEN 상태의 수주만 수정할 수 있습니다."),
+    CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE(HttpStatus.FORBIDDEN, "CO003", "본인 소속 지점의 수주만 접근할 수 있습니다."),
+    CUSTOMER_ORDER_NOT_CONFIRMABLE(HttpStatus.CONFLICT, "CO004", "OPEN 상태의 수주만 확정할 수 있습니다."),
+    CUSTOMER_ORDER_NOT_CANCELABLE(HttpStatus.CONFLICT, "CO005", "OPEN 또는 CONFIRMED 상태에서만 취소할 수 있습니다."),
+    CUSTOMER_ORDER_NOT_CLOSABLE(HttpStatus.CONFLICT, "CO006", "CONFIRMED 상태의 수주만 종료할 수 있습니다."),
 
     ;
 

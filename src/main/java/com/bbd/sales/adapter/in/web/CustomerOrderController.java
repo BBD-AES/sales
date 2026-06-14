@@ -49,7 +49,7 @@ public class CustomerOrderController {
 
     @PutMapping("/{coNumber}")
     public CustomerOrderDetailResponse update(@PathVariable String coNumber, @Valid @RequestBody UpdateCustomerOrderRequest request, CurrentUser currentUser) {
-        return webMapper.toDetailResponse(customerOrderUseCase.update(webMapper.toUpdateCommand(coNumber, request.note(), request, currentUser)));
+        return webMapper.toDetailResponse(customerOrderUseCase.update(webMapper.toUpdateCommand(coNumber, request, currentUser)));
     }
 
     @PatchMapping("/{coNumber}/confirm")

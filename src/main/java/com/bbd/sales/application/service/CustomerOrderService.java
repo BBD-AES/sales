@@ -65,7 +65,7 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     @Override
     public CustomerOrderResult create(CreateCustomerOrderCommand command) {
         CurrentUser user = command.currentUser();
-        if (!user.isAdmin() && !command.dealerWarehouseCode().equals(user.warehouseCode())) { // 본인 지점만 생성(admin 예외)
+        if (!user.isAdmin() && !(user.isBranchUser() && command.dealerWarehouseCode().equals(user.warehouseCode()))) { // 지점유저(본인 지점)만 생성, admin 예외
             throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
         }
         List<CustomerOrderLine> lines = toDomainLines(command.lines()); // sku -> 스냅샷 채워 도메인 라인 생성

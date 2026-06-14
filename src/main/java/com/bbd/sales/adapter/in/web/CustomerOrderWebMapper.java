@@ -29,7 +29,7 @@ public class CustomerOrderWebMapper {
     }
 
     public UpdateCustomerOrderCommand toUpdateCommand(
-            String coNumber, String note, UpdateCustomerOrderRequest req, CurrentUser currentUser
+            String coNumber, UpdateCustomerOrderRequest req, CurrentUser currentUser
     ) {
         return new UpdateCustomerOrderCommand(coNumber, req.note(),
                 req.lines() != null ? toLineCommands(req.lines()) : null, currentUser);

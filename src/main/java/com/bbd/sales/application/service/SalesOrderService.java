@@ -92,7 +92,7 @@ public class SalesOrderService implements SalesOrderUseCase {
     @Override
     public SalesOrderResult create(CreateSalesOrderCommand command) {
         CurrentUser user = command.currentUser();
-        if (!user.isAdmin() && !command.toWarehouseCode().equals(user.warehouseCode())) {
+        if (!user.isAdmin() && !(user.isBranchUser() && command.toWarehouseCode().equals(user.warehouseCode()))) {
             throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
         }
 

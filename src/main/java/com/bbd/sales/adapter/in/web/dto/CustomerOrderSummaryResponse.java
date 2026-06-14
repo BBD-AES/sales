@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public record CustomerOrderSummaryResponse(
-        String coNumber, String dealerWarehouseName, String dealerName, String customerName, CustomerOrderStatus status,
+        String coNumber, String dealerWarehouseCode, String dealerName, String customerName, CustomerOrderStatus status,
         String requestedBy, String confirmedBy, String canceledBy, String closedBy,
         LocalDateTime requestedAt, LocalDateTime confirmedAt, LocalDateTime canceledAt, LocalDateTime closedAt,
         BigDecimal totalAmount, String note
