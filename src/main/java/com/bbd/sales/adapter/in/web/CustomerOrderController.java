@@ -52,17 +52,17 @@ public class CustomerOrderController {
         return webMapper.toDetailResponse(customerOrderUseCase.update(webMapper.toUpdateCommand(coNumber, request.note(), request, currentUser)));
     }
 
-    @PatchMapping("/{coNumber}")
+    @PatchMapping("/{coNumber}/confirm")
     public CustomerOrderStatusChangeResponse confirm(@PathVariable String coNumber, CurrentUser currentUser) {
         return webMapper.toStatusChangeResponse(customerOrderUseCase.confirm(coNumber, currentUser));
     }
 
-    @PatchMapping("/{coNumber}")
+    @PatchMapping("/{coNumber}/cancel")
     public CustomerOrderStatusChangeResponse cancel(@PathVariable String coNumber, CurrentUser currentUser) {
         return webMapper.toStatusChangeResponse(customerOrderUseCase.cancel(coNumber, currentUser));
     }
 
-    @PatchMapping("/{coNumber}")
+    @PatchMapping("/{coNumber}/close")
     public CustomerOrderStatusChangeResponse close(@PathVariable String coNumber, CurrentUser currentUser) {
         return webMapper.toStatusChangeResponse(customerOrderUseCase.close(coNumber, currentUser));
     }

@@ -13,8 +13,8 @@ public interface CustomerOrderJpaRepository extends JpaRepository<CustomerOrderJ
 
     Optional<CustomerOrderJpaEntity> findByCoNumber(String coNumber);
 
-    @Query("select max(c.coNumber)" +
-            "from CustomerOrderJpaEntity c" +
+    @Query("select max(c.coNumber) " +
+            "from CustomerOrderJpaEntity c " +
             "where c.coNumber like :pattern")
     Optional<String> findMaxCoNumber(@Param("pattern") String pattern);
 }
