@@ -1,4 +1,5 @@
 server:
+  port: ${SERVER_PORT:8080}
   servlet:
     context-path: /sales
 
@@ -8,7 +9,7 @@ spring:
 
   threads:
     virtual:
-      enabled: true # 자바 21 버전을 통해서 이번에 버츄얼 스레드도 한번 써보기
+      enabled: true
 
   datasource:
     url: ${DB_ENDPOINT}
@@ -19,25 +20,43 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    defer-datasource-initialization: true   # data.sql 을 Hibernate 스키마 생성 이후 실행
+    defer-datasource-initialization: ${DEFER_DATASOURCE_INITIALIZATION:true}
+    show-sql: false
     properties:
       hibernate:
         format_sql: true
         use_sql_comments: true
-        show_sql: false
         jdbc:
           time_zone: Asia/Seoul
-        default_schema: bbd
+        default_schema: ${DB_SCHEMA:bbd}
 
   sql:
     init:
-      mode: always       # data.sql 시드 자동 로드(데모). 끄려면 never
+      mode: ${SQL_INIT_MODE:always}
       encoding: UTF-8
 
-# Swagger
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka.inwoohub.com:9092}
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:sales-hq-notification}
+      auto-offset-reset: ${KAFKA_OFFSET_RESET:earliest}
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
 springdoc:
   swagger-ui:
     tags-sorter: alpha
     operations-sorter: alpha
     url: /sales/v3/api-docs
     config-url: /sales/v3/api-docs/swagger-config
+
+logging:
+  level:
+    root: info
+    org.hibernate.SQL: debug
+    org.hibernate.orm.jdbc.bind: trace
