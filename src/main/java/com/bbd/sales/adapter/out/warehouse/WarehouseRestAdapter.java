@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClientException;
 
 /**
  * [역할]: 포트(WarehousePort)의 '실제 REST 구현'. 헥사고날의 어댑터 자리.
@@ -28,11 +29,11 @@ public class WarehouseRestAdapter implements WarehousePort {
             WarehouseResponse w = client.getByCode(warehouseCode);
             // 응답/이름 있으면 그대로, 없으면 코드로.
             return (w != null && w.name() != null) ? w.name() : warehouseCode;
-        } catch (Exception e) {
-            // 비핵심 표시값 -> 주문 흐름을 죽이지 않고 코드로 폴백. 운영에서 보이게 WARN.
-            log.warn("[WarehouseRest] 창고명 조회 실패 code ={} -> 코드 폴백 ({})", warehouseCode, e.toString());
+        } catch (RestClientException e) {
+            // inventory 호출 실패(연결거부/타임아웃/4xx·5xx)만 폴백. 어댑터 내부 버그(NPE 등)는 전파시켜 가시화.
+            // 창고명은 비핵심 표시값이라 주문 흐름은 죽이지 않고 코드로 폴백. throwable 째로 로깅(원인 추적).
+            log.warn("[WarehouseRest] 창고명 조회 실패 code={} -> 코드 폴백", warehouseCode, e);
             return warehouseCode;
-
         }
     }
 }
