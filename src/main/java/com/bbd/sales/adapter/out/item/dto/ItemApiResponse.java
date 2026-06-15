@@ -1,5 +1,6 @@
 package com.bbd.sales.adapter.out.item.dto;
 
+
 import com.bbd.sales.application.port.out.SourcingType;
 
 /**
@@ -12,5 +13,5 @@ public record ItemApiResponse(
         int unitPrice, // item은 원화 정수
         SourcingType sourcingType, // "MAKE"/"BUY" 문자열 -> sales enum 그대로 역직렬화
         boolean active
-) {
+) 
 }

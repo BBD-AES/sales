@@ -16,7 +16,7 @@ public interface InventoryWarehouseClient {
      * GET {base-url} + 해당 경로
      * GET {inventory.base-url}/api/v1/warehouses/{code} -> WarehouseResponse
      * */
-    @GetExchange("/api/v1/warehouse/{code}")
+    @GetExchange("/api/v1/warehouses/{code}")
     // 응답 JSON을 자동 역직렬화 정
     WarehouseResponse getByCode(@PathVariable("code") String code);
 }
