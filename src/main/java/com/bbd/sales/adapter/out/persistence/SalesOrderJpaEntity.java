@@ -3,6 +3,7 @@ package com.bbd.sales.adapter.out.persistence;
 import com.bbd.sales.domain.SalesOrderPriority;
 import com.bbd.sales.domain.SalesOrderStatus;
 import jakarta.persistence.*;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -19,21 +20,24 @@ import java.util.List;
 @Entity
 @Table(name = "sales_order")
 @Getter
-@Setter
-@NoArgsConstructor(access = lombok.AccessLevel.PROTECTED)
+@Setter(AccessLevel.PACKAGE) // 가변 컬럼은 패키지 전용. 매퍼만 접근, 외부 노출 금지
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class SalesOrderJpaEntity {
 
     // 물리 PK = so_number(업무 식별자). surrogate id 제거(팀 결정: id = so_number).
     @Id
     @Column(name = "so_number", nullable = false, updatable = false)
+    @Setter(AccessLevel.NONE)
     private String soNumber;
 
     @Version
+    @Setter(AccessLevel.NONE)
     private Long version;
 
-    private String toWarehouseCode;
-    private String toWarehouseName;   // 생성 시점 스냅샷(DBML 컬럼 to_warehouse_name)
+    @Setter(AccessLevel.NONE) private String toWarehouseCode;
+    @Setter(AccessLevel.NONE) private String toWarehouseName;   // 생성 시점 스냅샷(DBML 컬럼 to_warehouse_name)
 
+    // ---가변컬럼---
     @Enumerated(EnumType.STRING)
     private SalesOrderStatus status;
 
@@ -58,8 +62,17 @@ public class SalesOrderJpaEntity {
     private LocalDateTime receivedAt;
     private LocalDateTime canceledAt;
 
+    // 컬렉션은 replaceLines()로만 바꿀 수 있음
     @OneToMany(mappedBy = "salesOrder", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Setter(AccessLevel.NONE)
     private List<SalesOrderLineJpaEntity> lines = new ArrayList<>();
+
+    /** INSERT 전용 생성자: 불변 식별자 + 스냅샷. 가변 컬럼은 applyTo가 채움*/
+    public SalesOrderJpaEntity(String soNumber, String toWarehouseCode, String toWarehouseName) {
+        this.soNumber = soNumber;
+        this.toWarehouseCode = toWarehouseCode;
+        this.toWarehouseName = toWarehouseName;
+    }
 
     /**
      * 라인 전체 교체(양방향 동기화 포함).
