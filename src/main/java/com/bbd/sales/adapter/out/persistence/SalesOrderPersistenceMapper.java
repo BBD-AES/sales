@@ -12,15 +12,14 @@ import java.util.List;
 public class SalesOrderPersistenceMapper {
 
     public SalesOrderJpaEntity toNewEntity(SalesOrder so) {
-        SalesOrderJpaEntity entity = new SalesOrderJpaEntity();
-        entity.setSoNumber(so.soNumber());
+        SalesOrderJpaEntity entity = new SalesOrderJpaEntity(
+                so.soNumber(), so.toWarehouseCode(), so.toWarehouseName()
+        );
         applyTo(entity, so);
         return entity;
     }
 
     public void applyTo(SalesOrderJpaEntity entity, SalesOrder so) {
-        entity.setToWarehouseCode(so.toWarehouseCode());
-        entity.setToWarehouseName(so.toWarehouseName());
         entity.setStatus(so.status());
         entity.setPriority(so.priority());
         entity.setNote(so.note());

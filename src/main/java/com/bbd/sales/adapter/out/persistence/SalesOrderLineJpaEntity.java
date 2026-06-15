@@ -2,6 +2,7 @@ package com.bbd.sales.adapter.out.persistence;
 
 import com.bbd.sales.domain.FulfillmentSource;
 import jakarta.persistence.*;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -16,7 +17,6 @@ import java.math.BigDecimal;
 @Table(name = "sales_order_line",
         uniqueConstraints = @UniqueConstraint(name = "uq_sales_order_line", columnNames = {"so_number", "line_no"}))
 @Getter
-@Setter
 @NoArgsConstructor(access = lombok.AccessLevel.PROTECTED)
 public class SalesOrderLineJpaEntity {
 
@@ -26,6 +26,7 @@ public class SalesOrderLineJpaEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "so_number")   // FK -> sales_order.so_number (물리 PK)
+    @Setter(AccessLevel.PACKAGE)
     private SalesOrderJpaEntity salesOrder;
 
     private int lineNo;
@@ -34,12 +35,15 @@ public class SalesOrderLineJpaEntity {
     private BigDecimal unitPriceSnapshot;
     private int quantity;
 
-    // 라인레벨 충족추적
+    // ---라인레벨 충족추적---
+    @Setter(AccessLevel.PACKAGE)
     private int reservedQuantity;
 
     @Enumerated(EnumType.STRING)
+    @Setter(AccessLevel.PACKAGE)
     private FulfillmentSource fulfillmentSource;
 
+    @Setter(AccessLevel.PACKAGE)
     private String fromWarehouseCode;   // 출발지(출고창고)=소스. confirm 시 라인별 기록, 전 null
 
     public SalesOrderLineJpaEntity(int lineNo, String sku, String nameSnapshot,

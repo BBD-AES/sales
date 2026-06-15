@@ -12,12 +12,13 @@ public class CustomerOrderPersistenceMapper {
 
     // INSERT: 새 엔티티ㅣ 만들고 불변 필드(co_number, dealer/customer)까지 채움
     public CustomerOrderJpaEntity toNewEntity(CustomerOrder co) {
-        CustomerOrderJpaEntity e = new CustomerOrderJpaEntity();
-        e.setCoNumber(co.coNumber());
-        e.setDealerWarehouseCode(co.dealerWarehouseCode());
-        e.setDealerName(co.dealerName());
-        e.setCustomerName(co.customerName());
-        e.setCustomerContact(co.customerContact());
+        CustomerOrderJpaEntity e = new CustomerOrderJpaEntity(
+                co.coNumber(),
+                co.dealerWarehouseCode(),
+                co.dealerName(),
+                co.customerName(),
+                co.customerContact()
+        );
         applyTo(e, co);
         return e;
     }
