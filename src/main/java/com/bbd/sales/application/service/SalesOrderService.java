@@ -7,12 +7,7 @@ import com.bbd.sales.application.command.UpdateSalesOrderCommand;
 import com.bbd.sales.application.port.in.SalesOrderUseCase;
 import com.bbd.sales.application.port.out.*;
 import com.bbd.sales.application.result.*;
-import com.bbd.sales.domain.FulfillmentSource;
-import com.bbd.sales.domain.LineReservation;
-import com.bbd.sales.domain.SalesOrder;
-import com.bbd.sales.domain.SalesOrderLine;
-import com.bbd.sales.domain.SalesOrderStateException;
-import com.bbd.sales.domain.SalesOrderStatus;
+import com.bbd.sales.domain.*;
 import com.bbd.sales.global.error.ApiException;
 import com.bbd.sales.global.error.dto.ErrorCode;
 import com.bbd.sales.global.security.CurrentUser;
@@ -44,9 +39,10 @@ public class SalesOrderService implements SalesOrderUseCase {
      * 서비스는 인터페이스 타입만 앎. 어떤 구현이 들어올 지는 스프링이 런타임에 주입함. (LoggingSalesOrderEventPublisher -> OutboxSalesOrderEventPublisher로 변경)
      */
     private final SalesOrderEventPublisher eventPublisher;
-    private final CatalogPort catalogPort;
     private final ProcurementPort procurementPort;
     private final ProductionPort productionPort;
+    private final ItemPort itemPort;
+    private final WarehousePort warehousePort;
 
     // ============================ 조회 ============================
 
@@ -101,7 +97,7 @@ public class SalesOrderService implements SalesOrderUseCase {
 
         // 창고명 스냅샷: 생성 시점에 한 번만 조회해 박는다(이후 읽기는 원격 호출 0).
         // 출발지(source)는 sales 가 저장하지 않음 -> HQ/충족 단계가 결정.
-        String fromName = catalogPort.warehouseName(command.toWarehouseCode());
+        String fromName = warehousePort.warehouseName(command.toWarehouseCode());
 
         SalesOrder so = SalesOrder.request(
                 soNumber,
@@ -276,7 +272,7 @@ public class SalesOrderService implements SalesOrderUseCase {
             int stillShort = r.requested() - r.reserved();
             FulfillmentSource source = FulfillmentSource.STOCK;
             if (stillShort > 0) {
-                SourcingType type = catalogPort.resolveProduct(r.sku()).sourcingType();
+                SourcingType type = itemPort.resolveProduct(r.sku()).sourcingType();
                 if (type == SourcingType.MAKE) {
                     source = FulfillmentSource.PRODUCTION;
                     toProduce.add(new StockTransferLine(r.sku(), stillShort));
@@ -344,7 +340,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         List<SalesOrderLine> lines = new ArrayList<>();
         int lineNo = 1;
         for (SalesOrderLineCommand lc : lineCommands) {
-            ProductSnapshot p = catalogPort.resolveProduct(lc.sku());
+            ProductSnapshot p = itemPort.resolveProduct(lc.sku());
             lines.add(new SalesOrderLine(lineNo++, p.sku(), p.name(), p.unitPrice(), lc.quantity()));
         }
         return lines;
