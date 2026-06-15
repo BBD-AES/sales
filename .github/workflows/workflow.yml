@@ -4,25 +4,16 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+  packages: read
+
 env:
   DOCKER_IMAGE_NAME: bbd-sales
 
-  # 나중에 ECR 배포 사용할 때 주석 해제
-  # AWS_REGION: ap-northeast-2
-  # AWS_ACCOUNT_ID: "013969386212"
-  # ECR_REPOSITORY: bbd-sales
-
-# 현재 배포 흐름
-# 1. Docker Hub 로그인
-# 2. Docker Hub용 이미지 빌드
-# 3. Docker Hub에 push
-# 4. infra 레포 deploy workflow 호출
-#
-# 나중에 ECR 사용할 경우
-# 1. AWS 인증
-# 2. ECR 로그인
-# 3. 같은 이미지에 ECR 태그 추가
-# 4. ECR에 push
+  AWS_REGION: ap-northeast-2
+  AWS_ACCOUNT_ID: "013969386212"
+  ECR_REPOSITORY: bbd-sales
 
 jobs:
   build-and-push:
@@ -38,30 +29,32 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build & Push Docker Image
+      - name: Build & Push Docker Image to Docker Hub
         run: |
           docker build \
+            --build-arg GITHUB_USERNAME=${{ github.actor }} \
+            --build-arg GITHUB_TOKEN=${{ secrets.GH_PACKAGES_TOKEN }} \
             -t ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest \
             .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
 
-      # 나중에 ECR 배포 사용할 때 주석 해제
-      # - name: Configure AWS credentials
-      #   uses: aws-actions/configure-aws-credentials@v4
-      #   with:
-      #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      #     aws-region: ${{ env.AWS_REGION }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      # - name: Login to Amazon ECR
-      #   uses: aws-actions/amazon-ecr-login@v2
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
-      # - name: Push to ECR
-      #   run: |
-      #     DOCKERHUB_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
-      #     ECR_IMAGE=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:latest
-      #     docker tag $DOCKERHUB_IMAGE $ECR_IMAGE
-      #     docker push $ECR_IMAGE
+      - name: Push to ECR
+        run: |
+          DOCKERHUB_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
+          ECR_IMAGE=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:latest
+
+          docker tag $DOCKERHUB_IMAGE $ECR_IMAGE
+          docker push $ECR_IMAGE
 
       - name: Trigger infra deploy
         uses: peter-evans/repository-dispatch@v3
@@ -69,4 +62,4 @@ jobs:
           token: ${{ secrets.INFRA_DEPLOY_TOKEN }}
           repository: BBD-AES/infra
           event-type: deploy-service
-          client-payload: '{"service":"bbd-sales"}'
+          client-payload: '{"service":"bbd-sales","profile":"public"}'
