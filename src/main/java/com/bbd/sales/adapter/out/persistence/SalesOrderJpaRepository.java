@@ -1,8 +1,8 @@
 package com.bbd.sales.adapter.out.persistence;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.querydsl.QuerydslPredicateExecutor;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
@@ -10,7 +10,7 @@ import java.util.Optional;
 /** Spring Data JPA 리포지토리(영속 기술 세부). 포트가 아니라 어댑터 내부 도구. */
 public interface SalesOrderJpaRepository
         extends JpaRepository<SalesOrderJpaEntity, String>,
-        JpaSpecificationExecutor<SalesOrderJpaEntity> {
+        QuerydslPredicateExecutor<SalesOrderJpaEntity> {
 
     Optional<SalesOrderJpaEntity> findBySoNumber(String soNumber);
 

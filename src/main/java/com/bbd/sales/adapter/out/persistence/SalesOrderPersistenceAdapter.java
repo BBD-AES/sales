@@ -62,7 +62,7 @@ public class SalesOrderPersistenceAdapter implements SalesOrderRepository {
         Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "requestedAt"));
 
         Page<SalesOrderJpaEntity> result =
-                jpaRepository.findAll(SalesOrderSpecifications.from(criteria), pageable);
+                jpaRepository.findAll(SalesOrderPredicates.from(criteria), pageable);
 
         List<SalesOrder> content = result.getContent().stream().map(mapper::toDomain).toList();
         return new SalesOrderPage(content, result.getTotalElements(), result.getNumber(), result.getSize());
