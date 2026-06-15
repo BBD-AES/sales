@@ -37,7 +37,8 @@ class SalesOrderServiceTest {
     @Mock SalesOrderRepository repository;
     @Mock InventoryPort inventoryPort;
     @Mock SalesOrderEventPublisher eventPublisher;
-    @Mock CatalogPort catalogPort;
+    @Mock ItemPort itemPort;
+    @Mock WarehousePort warehousePort;
     @Mock ProcurementPort procurementPort;
     @Mock ProductionPort productionPort;
 
@@ -81,7 +82,7 @@ class SalesOrderServiceTest {
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
         when(inventoryPort.reserve(any(), any(), anyList()))
                 .thenReturn(List.of(new ReservationResult("RLY-12V-30A-01", 5, 0)));
-        when(catalogPort.resolveProduct("RLY-12V-30A-01"))
+        when(itemPort.resolveProduct("RLY-12V-30A-01"))
                 .thenReturn(new ProductSnapshot("RLY-12V-30A-01", "릴레이", new BigDecimal("8500"), SourcingType.BUY));
 
         service.approve("SO-1", HQ);
@@ -101,7 +102,7 @@ class SalesOrderServiceTest {
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
         when(inventoryPort.reserve(any(), any(), anyList()))
                 .thenReturn(List.of(new ReservationResult("CLT-DSK-MED-01", 3, 1)));
-        when(catalogPort.resolveProduct("CLT-DSK-MED-01"))
+        when(itemPort.resolveProduct("CLT-DSK-MED-01"))
                 .thenReturn(new ProductSnapshot("CLT-DSK-MED-01", "클러치", new BigDecimal("145000"), SourcingType.MAKE));
 
         service.approve("SO-1", HQ);

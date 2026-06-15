@@ -1,7 +1,7 @@
 package com.bbd.sales.application.port.out;
 
 /**
- * 품목 조달 유형(item 마스터 속성, CatalogPort 로 조회).
+ * 품목 조달 유형(item 마스터 속성, ItemPort 로 조회).
  * 부족분 분기에 사용한다: BUY -> 구매요청(PR, procurement), MAKE -> 생산요청(production).
  */
 public enum SourcingType {

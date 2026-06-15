@@ -3,10 +3,7 @@ package com.bbd.sales.application.service;
 import com.bbd.sales.application.command.CreateCustomerOrderCommand;
 import com.bbd.sales.application.command.CustomerOrderLineCommand;
 import com.bbd.sales.application.command.UpdateCustomerOrderCommand;
-import com.bbd.sales.application.port.out.CatalogPort;
-import com.bbd.sales.application.port.out.CustomerOrderRepository;
-import com.bbd.sales.application.port.out.ProductSnapshot;
-import com.bbd.sales.application.port.out.SourcingType;
+import com.bbd.sales.application.port.out.*;
 import com.bbd.sales.application.result.CustomerOrderResult;
 import com.bbd.sales.application.result.CustomerOrderStatusChangeResult;
 import com.bbd.sales.domain.CustomerOrder;
@@ -33,13 +30,11 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * CustomerOrderService 유스케이스 단위테스트.
- * out 포트(CustomerOrderRepository, CatalogPort)를 Mockito 목으로 두고
+ * out 포트(CustomerOrderRepository, ItemPort/WarehousePort)를 Mockito 목으로 두고
  * 생성/조회 권한·상태전이 위임·라인 교체 분기·404 로드 실패를 검증한다.
  * DB·스프링 컨텍스트 없이 순수 협력 검증.
  */
@@ -47,7 +42,8 @@ import static org.mockito.Mockito.when;
 class CustomerOrderServiceTest {
 
     @Mock CustomerOrderRepository repository;
-    @Mock CatalogPort catalogPort;
+    @Mock ItemPort itemPort;
+    @Mock WarehousePort warehousePort;
 
     @InjectMocks CustomerOrderService service;
 
@@ -82,10 +78,10 @@ class CustomerOrderServiceTest {
                 List.of(new CustomerOrderLineCommand("OIL-FLT-001", 2)),
                 BRANCH);
 
-        when(catalogPort.resolveProduct("OIL-FLT-001"))
+        when(itemPort.resolveProduct("OIL-FLT-001"))
                 .thenReturn(new ProductSnapshot("OIL-FLT-001", "오일필터", new BigDecimal("1500"), SourcingType.BUY));
         when(repository.nextCoNumber()).thenReturn("CO-2026-0001");
-        when(catalogPort.warehouseName(WH)).thenReturn("강남 1지점");
+        when(warehousePort.warehouseName(WH)).thenReturn("강남 1지점");
         when(repository.save(any(CustomerOrder.class))).thenAnswer(inv -> inv.getArgument(0));
 
         CustomerOrderResult result = service.create(command);
@@ -121,10 +117,10 @@ class CustomerOrderServiceTest {
                 List.of(new CustomerOrderLineCommand("OIL-FLT-001", 1)),
                 ADMIN);
 
-        when(catalogPort.resolveProduct("OIL-FLT-001"))
+        when(itemPort.resolveProduct("OIL-FLT-001"))
                 .thenReturn(new ProductSnapshot("OIL-FLT-001", "오일필터", new BigDecimal("1000"), SourcingType.BUY));
         when(repository.nextCoNumber()).thenReturn("CO-2026-0002");
-        when(catalogPort.warehouseName("WH-BR-777")).thenReturn("창고777");
+        when(warehousePort.warehouseName("WH-BR-777")).thenReturn("창고777");
         when(repository.save(any(CustomerOrder.class))).thenAnswer(inv -> inv.getArgument(0));
 
         CustomerOrderResult result = service.create(command);
@@ -149,7 +145,7 @@ class CustomerOrderServiceTest {
 
         verify(repository, never()).nextCoNumber();
         verify(repository, never()).save(any());
-        verify(catalogPort, never()).resolveProduct(any());
+        verify(itemPort, never()).resolveProduct(any());
     }
 
     // ---------------------------------------------------------------------
@@ -338,14 +334,14 @@ class CustomerOrderServiceTest {
                 BRANCH);
 
         when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(co));
-        when(catalogPort.resolveProduct("RLY-12V-30A-01"))
+        when(itemPort.resolveProduct("RLY-12V-30A-01"))
                 .thenReturn(new ProductSnapshot("RLY-12V-30A-01", "릴레이", new BigDecimal("8500"), SourcingType.BUY));
         when(repository.save(co)).thenReturn(co);
 
         CustomerOrderResult result = service.update(command);
 
         // 라인 교체 경로 -> resolveProduct 호출됨
-        verify(catalogPort).resolveProduct("RLY-12V-30A-01");
+        verify(itemPort).resolveProduct("RLY-12V-30A-01");
         verify(repository).save(co);
         assertThat(co.note()).isEqualTo("수정메모");
         assertThat(co.lines()).hasSize(1);
@@ -368,7 +364,7 @@ class CustomerOrderServiceTest {
         CustomerOrderResult result = service.update(command);
 
         // 라인 미교체 -> resolveProduct 호출 없음, 기존 라인 그대로
-        verify(catalogPort, never()).resolveProduct(any());
+        verify(itemPort, never()).resolveProduct(any());
         verify(repository).save(co);
         assertThat(co.note()).isEqualTo("메모만수정");
         assertThat(co.lines()).hasSize(1);
@@ -390,7 +386,7 @@ class CustomerOrderServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
 
-        verify(catalogPort, never()).resolveProduct(any());
+        verify(itemPort, never()).resolveProduct(any());
         verify(repository, never()).save(any());
     }
 }

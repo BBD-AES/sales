@@ -27,7 +27,8 @@ import java.util.List;
 public class CustomerOrderService implements CustomerOrderUseCase {
 
     private final CustomerOrderRepository repository; // 구현(JPA어댑터)은 모르는 채로,out 포트(인터페이스)에만 의존
-    private final CatalogPort catalogPort; //
+    private final ItemPort itemPort;
+    private final WarehousePort warehousePort;
 
     @Override
     @Transactional(readOnly = true)
@@ -70,7 +71,7 @@ public class CustomerOrderService implements CustomerOrderUseCase {
         }
         List<CustomerOrderLine> lines = toDomainLines(command.lines()); // sku -> 스냅샷 채워 도메인 라인 생성
         String coNumber = repository.nextCoNumber(); // 채번 (CO-2026-xxxx)
-        String dealerName = catalogPort.warehouseName(command.dealerWarehouseCode()); // 딜러명 스냅샷
+        String dealerName = warehousePort.warehouseName(command.dealerWarehouseCode()); // 딜러명 스냅샷
         CustomerOrder co = CustomerOrder.receive(coNumber, command.dealerWarehouseCode(), dealerName, // 생성 규칙은 도메인 생성 메서드에서 검증
                 command.customerName(), command.customerContact(), command.note(),
                 lines, user.employeeNumber(), LocalDateTime.now());
@@ -142,7 +143,7 @@ public class CustomerOrderService implements CustomerOrderUseCase {
         List<CustomerOrderLine> lines = new ArrayList<>();
         int lineNo = 1;
         for (CustomerOrderLineCommand lc : cmds) {
-            ProductSnapshot p = catalogPort.resolveProduct(lc.sku());
+            ProductSnapshot p = itemPort.resolveProduct(lc.sku());
             lines.add(new CustomerOrderLine(lineNo++, p.sku(), p.name(), p.unitPrice(), lc.quantity()));
         }
         return lines;
