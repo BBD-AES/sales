@@ -17,7 +17,8 @@ public class OutboxEvent {
     private Long id;
     private String aggregateType; // "SalesOrder"
     private String aggregateId; // soNumber (= Kafka 파티션 키)
-    private String eventType; // "submitted" ...
+    private String eventType; // "submitted"(SalesOrder 내부 알림) / "PURCHASE_REQUESTED"(구매요청 계약 이벤트)
+    private String topic; // 발행 대상 Kafka 토픽 — 토픽이 여러 개라 폴러가 행만 보고 발행처를 안다(계약서 §6)
 
     @Column(columnDefinition = "text")
     private String payload; // JSON
@@ -30,12 +31,13 @@ public class OutboxEvent {
     protected OutboxEvent() {
     }
 
-    public OutboxEvent(String aggregateType, String aggregateId, String eventType, String payload, String eventId) {
+    public OutboxEvent(String aggregateType, String aggregateId, String eventType, String payload, String eventId, String topic) {
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
         this.eventType = eventType;
         this.payload = payload;
         this.eventId = eventId;
+        this.topic = topic;
         this.createdAt = Instant.now();
         this.sent = false;
     }
@@ -59,5 +61,9 @@ public class OutboxEvent {
 
     public String getPayload() {
         return payload;
+    }
+
+    public String getTopic() {
+        return topic;
     }
 }

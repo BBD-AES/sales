@@ -77,6 +77,7 @@ public class OutboxSalesOrderEventPublisher implements SalesOrderEventPublisher 
         }
 
         // 이 save()는 submit()의 @Transactional 안에서 실행 -> SO 저장과 같은 커밋(원자적, dual-write 회피)
-        outbox.save(new OutboxEvent("SalesOrder", soNumber, eventType, payload, eventId));
+        // 기존 SalesOrder 알림 토픽 규칙 유지: sales.order.<eventType> (계약 외 내부 채널)
+        outbox.save(new OutboxEvent("SalesOrder", soNumber, eventType, payload, eventId, "sales.order." + eventType));
     }
 }
