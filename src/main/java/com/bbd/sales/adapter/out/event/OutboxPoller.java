@@ -29,7 +29,8 @@ public class OutboxPoller {
     @Transactional
     public void flush() {
         for (OutboxEvent e : outbox.findTop100BySentFalseOrderByIdAsc()) {
-            String topic = "sales.order." + e.getEventType(); // -> sales.order.submitted
+            // 토픽은 outbox 행에 저장된 값 사용(이벤트마다 다름). 레거시(topic 미기록) 행은 기존 규칙으로 폴백.
+            String topic = e.getTopic() != null ? e.getTopic() : "sales.order." + e.getEventType();
             try {
                 // 키 = soNumber -> 같은 주문은 같은 파티션(순서 보장). get(timeout)으로 발행 확인 후 sent (브로커 지연 시 무한 대기 방지).
                 kafkaTemplate.send(topic, e.getAggregateId(), e.getPayload()).get(5, TimeUnit.SECONDS);
