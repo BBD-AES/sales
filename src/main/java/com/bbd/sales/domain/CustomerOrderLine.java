@@ -21,7 +21,10 @@ public class CustomerOrderLine {
         this.sku = sku;
         this.nameSnapshot = nameSnapshot;
         // null이면 기본값 넣기
-        this.unitPriceSnapshot = Objects.requireNonNullElse(unitPriceSnapshot, BigDecimal.ZERO);
+        if (unitPriceSnapshot == null || unitPriceSnapshot.signum() <= 0) {
+            throw new IllegalArgumentException("unitPriceSnapshot 는 0보다 커야 합니다." + unitPriceSnapshot);
+        }
+        this.unitPriceSnapshot = unitPriceSnapshot;
         this.quantity = quantity;
     }
 

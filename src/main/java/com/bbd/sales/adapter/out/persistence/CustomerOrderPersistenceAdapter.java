@@ -59,7 +59,7 @@ public class CustomerOrderPersistenceAdapter implements CustomerOrderRepository 
         int safeSize = size <= 0 ? 20 : size;
         Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "requestedAt"));
 
-        Page<CustomerOrderJpaEntity> result = jpaRepository.findAll(CustomerOrderSpecifications.from(criteria), pageable);
+        Page<CustomerOrderJpaEntity> result = jpaRepository.findAll(CustomerOrderPredicates.from(criteria), pageable);
 
         List<CustomerOrder> content = result.getContent().stream().map(mapper::toDomain).toList();
         return new CustomerOrderPage(content, result.getTotalElements(), result.getNumber(), result.getSize());
