@@ -22,8 +22,8 @@ public class ApiException extends ErrorResponseException {
         super(errorCode.getStatus(), createBody(errorCode), null);
         this.errorCode = errorCode;
     }
-    
-    /** 오버로드) 동적 상세(예: SKU 목록)가 필요할 때만 쓴다. */
+
+    /** (오버로드) 동적 상세(예: SKU 목록)가 필요할 때만 쓴다. */
     public ApiException(ErrorCode errorCode, String detail) {
         super(errorCode.getStatus(), createBody(errorCode), null);
         this.errorCode = errorCode;
