@@ -3,7 +3,10 @@ package com.bbd.sales.application.service;
 import com.bbd.sales.application.command.CreateCustomerOrderCommand;
 import com.bbd.sales.application.command.CustomerOrderLineCommand;
 import com.bbd.sales.application.command.UpdateCustomerOrderCommand;
-import com.bbd.sales.application.port.out.*;
+import com.bbd.sales.application.port.out.CustomerOrderRepository;
+import com.bbd.sales.application.port.out.ItemPort;
+import com.bbd.sales.application.port.out.ProductSnapshot;
+import com.bbd.sales.application.port.out.WarehousePort;
 import com.bbd.sales.application.result.CustomerOrderResult;
 import com.bbd.sales.application.result.CustomerOrderStatusChangeResult;
 import com.bbd.sales.domain.CustomerOrder;
@@ -79,7 +82,7 @@ class CustomerOrderServiceTest {
                 BRANCH);
 
         when(itemPort.resolveProduct("OIL-FLT-001"))
-                .thenReturn(new ProductSnapshot("OIL-FLT-001", "오일필터", new BigDecimal("1500"), SourcingType.BUY));
+                .thenReturn(new ProductSnapshot("OIL-FLT-001", "오일필터", new BigDecimal("1500")));
         when(repository.nextCoNumber()).thenReturn("CO-2026-0001");
         when(warehousePort.warehouseName(WH)).thenReturn("강남 1지점");
         when(repository.save(any(CustomerOrder.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -118,7 +121,7 @@ class CustomerOrderServiceTest {
                 ADMIN);
 
         when(itemPort.resolveProduct("OIL-FLT-001"))
-                .thenReturn(new ProductSnapshot("OIL-FLT-001", "오일필터", new BigDecimal("1000"), SourcingType.BUY));
+                .thenReturn(new ProductSnapshot("OIL-FLT-001", "오일필터", new BigDecimal("1000")));
         when(repository.nextCoNumber()).thenReturn("CO-2026-0002");
         when(warehousePort.warehouseName("WH-BR-777")).thenReturn("창고777");
         when(repository.save(any(CustomerOrder.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -335,7 +338,7 @@ class CustomerOrderServiceTest {
 
         when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(co));
         when(itemPort.resolveProduct("RLY-12V-30A-01"))
-                .thenReturn(new ProductSnapshot("RLY-12V-30A-01", "릴레이", new BigDecimal("8500"), SourcingType.BUY));
+                .thenReturn(new ProductSnapshot("RLY-12V-30A-01", "릴레이", new BigDecimal("8500")));
         when(repository.save(co)).thenReturn(co);
 
         CustomerOrderResult result = service.update(command);

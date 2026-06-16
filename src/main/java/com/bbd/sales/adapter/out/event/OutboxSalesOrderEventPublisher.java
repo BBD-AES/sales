@@ -4,7 +4,6 @@ import com.bbd.sales.application.port.out.SalesOrderEventPublisher;
 import com.bbd.sales.global.error.ApiException;
 import com.bbd.sales.global.error.dto.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -15,7 +14,6 @@ import java.util.UUID;
 /**
  * 헥사고날에서 필요성: 포트를 "outbox 테이블에 같은 트랜잭션으로 INSERT"하게 구현
  */
-@Primary // <- 기존 LoggingSalesOrderEventPublisher 대신 이게 주입됨(기존 파일 삭제 전 과도기)
 @Component
 @RequiredArgsConstructor
 public class OutboxSalesOrderEventPublisher implements SalesOrderEventPublisher {
