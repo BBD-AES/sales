@@ -216,7 +216,7 @@ public class SalesOrder {
 
         for (ReservationApplication application : applications) {
             LineReservation r = application.reservation();
-            application.line().applyReservation(r.reserved(), r.source(), r.sourceWarehouseCode());
+            application.line().applyReservation(r.reserved(), r.sourceWarehouseCode());
         }
     }
 
@@ -229,9 +229,6 @@ public class SalesOrder {
         }
         if (reservation.reserved() < 0) {
             throw new IllegalArgumentException("reserved 는 0 이상이어야 합니다.");
-        }
-        if (reservation.source() == null) {
-            throw new IllegalArgumentException("reservation source 는 필수입니다.");
         }
     }
 
