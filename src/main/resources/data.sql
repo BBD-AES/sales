@@ -29,6 +29,9 @@ INSERT INTO sales_order (version, so_number, to_warehouse_code, to_warehouse_nam
 VALUES (0, 'SO-2026-0006', 'WH-BR-004', '대구 1지점', 'REQUESTED', 'NORMAL', '지점 작성 중', 'BR004', '2026-05-25 09:00:00')
 ON CONFLICT (so_number) DO NOTHING;
 
+-- FulfillmentSource enum 변경(STOCK/BACKORDERED) self-heal: 옛 CHECK 제약 제거(ddl-auto=update 한계). 테이블 없으면 no-op.
+ALTER TABLE IF EXISTS sales_order_line DROP CONSTRAINT IF EXISTS sales_order_line_fulfillment_source_check;
+
 -- 라인 (해당 주문에 라인이 없을 때만 삽입 -> 멱등)
 INSERT INTO sales_order_line (so_number, line_no, sku, name_snapshot, unit_price_snapshot, quantity, reserved_quantity, fulfillment_source, from_warehouse_code)
 SELECT so.so_number, 1, 'OIL-FLT-001', '오일필터', 3200, 50, 50, 'STOCK', 'WH-HQ-001' FROM sales_order so
@@ -43,7 +46,7 @@ SELECT so.so_number, 1, 'BAT-12V-60', '배터리 12V 60Ah', 95000, 10, 0, NULL, 
 WHERE so.so_number = 'SO-2026-0003' AND NOT EXISTS (SELECT 1 FROM sales_order_line l WHERE l.so_number = so.so_number);
 
 INSERT INTO sales_order_line (so_number, line_no, sku, name_snapshot, unit_price_snapshot, quantity, reserved_quantity, fulfillment_source, from_warehouse_code)
-SELECT so.so_number, 1, 'RLY-12V-30A-01', '릴레이 12V 30A', 8500, 20, 0, 'PURCHASE', NULL FROM sales_order so
+SELECT so.so_number, 1, 'RLY-12V-30A-01', '릴레이 12V 30A', 8500, 20, 0, 'BACKORDERED', NULL FROM sales_order so
 WHERE so.so_number = 'SO-2026-0004' AND NOT EXISTS (SELECT 1 FROM sales_order_line l WHERE l.so_number = so.so_number);
 
 INSERT INTO sales_order_line (so_number, line_no, sku, name_snapshot, unit_price_snapshot, quantity, reserved_quantity, fulfillment_source, from_warehouse_code)
