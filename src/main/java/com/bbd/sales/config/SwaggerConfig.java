@@ -23,6 +23,10 @@ public class SwaggerConfig {
                         .description("Nginx"))
 
                 .addServersItem(new Server()
+                        .url("http://192.168.200.220:8085/sales")
+                        .description("노트북 local"))
+
+                .addServersItem(new Server()
                         .url("http://112.218.95.58/sales")
                         .description("External Nginx"));
 
