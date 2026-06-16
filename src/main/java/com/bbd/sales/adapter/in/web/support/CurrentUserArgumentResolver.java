@@ -18,7 +18,7 @@ import org.springframework.web.method.support.ModelAndViewContainer;
  * 실패는 ResponseStatusException 대신 ApiException(+ErrorCode)으로 던져,
  * 나머지 에러와 동일한 ProblemDetail(코드 포함) 포맷을 유지한다.
  */
-@Component
+//@Component
 public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolver {
 
     @Override
