@@ -7,7 +7,6 @@ import org.springframework.http.HttpStatus;
 @Getter
 @AllArgsConstructor
 public enum ErrorCode {
-    TEST_ERROR(HttpStatus.NOT_FOUND, "T001", "찾을 수 없습니다."),
 
     SALES_ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "SO001", "출고 요청을 찾을 수 없습니다."),
     SALES_ORDER_NOT_EDITABLE(HttpStatus.CONFLICT, "SO002", "REQUESTED 상태의 출고 요청만 수정할 수 있습니다."),
