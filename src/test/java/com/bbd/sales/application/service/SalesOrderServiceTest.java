@@ -40,7 +40,6 @@ class SalesOrderServiceTest {
     @Mock ItemPort itemPort;
     @Mock WarehousePort warehousePort;
     @Mock ProcurementPort procurementPort;
-    @Mock ProductionPort productionPort;
 
     @InjectMocks SalesOrderService service;
 
@@ -72,7 +71,6 @@ class SalesOrderServiceTest {
         assertThat(so.lines().get(0).fulfillmentSource()).isEqualTo(FulfillmentSource.STOCK);
         verify(eventPublisher).publishFulfilling("SO-1");
         verify(procurementPort, never()).requestPurchase(any(), any(), anyList());
-        verify(productionPort, never()).requestProduction(any(), any(), anyList());
     }
 
     @Test
@@ -82,36 +80,30 @@ class SalesOrderServiceTest {
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
         when(inventoryPort.reserve(any(), any(), anyList()))
                 .thenReturn(List.of(new ReservationResult("RLY-12V-30A-01", 5, 0)));
-        when(itemPort.resolveProduct("RLY-12V-30A-01"))
-                .thenReturn(new ProductSnapshot("RLY-12V-30A-01", "릴레이", new BigDecimal("8500"), SourcingType.BUY));
 
         service.approve("SO-1", HQ);
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED);
         assertThat(so.lines().get(0).reservedQuantity()).isZero();
-        assertThat(so.lines().get(0).fulfillmentSource()).isEqualTo(FulfillmentSource.PURCHASE);
+        assertThat(so.lines().get(0).fulfillmentSource()).isEqualTo(FulfillmentSource.BACKORDERED);
         verify(procurementPort).requestPurchase(eq("SO-1"), eq("WH-BR-001"), anyList());
-        verify(productionPort, never()).requestProduction(any(), any(), anyList());
         verify(eventPublisher).publishBackordered("SO-1");
     }
 
     @Test
-    @DisplayName("approve: 부족분 MAKE -> BACKORDERED + 생산요청, 구매 호출 없음")
+    @DisplayName("approve: 부족분 MAKE -> BACKORDERED + procurement 통지(buy/make는 procurement)")
     void approve_shortfallMake_requestsProduction() {
         SalesOrder so = submitted("CLT-DSK-MED-01", 3);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
         when(inventoryPort.reserve(any(), any(), anyList()))
                 .thenReturn(List.of(new ReservationResult("CLT-DSK-MED-01", 3, 1)));
-        when(itemPort.resolveProduct("CLT-DSK-MED-01"))
-                .thenReturn(new ProductSnapshot("CLT-DSK-MED-01", "클러치", new BigDecimal("145000"), SourcingType.MAKE));
 
         service.approve("SO-1", HQ);
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED);
-        assertThat(so.lines().get(0).reservedQuantity()).isEqualTo(1);
-        assertThat(so.lines().get(0).fulfillmentSource()).isEqualTo(FulfillmentSource.PRODUCTION);
-        verify(productionPort).requestProduction(eq("SO-1"), eq("WH-BR-001"), anyList());
-        verify(procurementPort, never()).requestPurchase(any(), any(), anyList());
+        assertThat(so.lines().get(0).fulfillmentSource()).isEqualTo(FulfillmentSource.BACKORDERED);
+        verify(procurementPort).requestPurchase(eq("SO-1"), eq("WH-BR-001"), anyList());
+        verify(eventPublisher).publishBackordered("SO-1");
     }
 
     @Test
@@ -145,7 +137,7 @@ class SalesOrderServiceTest {
     @DisplayName("fulfillBackorder: 전량 재예약되면 IN_FULFILLMENT")
     void fulfillBackorder_reserved_inFulfillment() {
         SalesOrder so = submitted("RLY-12V-30A-01", 5);
-        so.confirmByHq("HQ001", NOW, List.of(new LineReservation("RLY-12V-30A-01", 0, FulfillmentSource.PURCHASE))); // -> BACKORDERED
+        so.confirmByHq("HQ001", NOW, List.of(new LineReservation("RLY-12V-30A-01", 0))); // reserved=0 -> BACKORDERED
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
         when(inventoryPort.reserve(any(), any(), anyList()))
                 .thenReturn(List.of(new ReservationResult("RLY-12V-30A-01", 5, 5)));

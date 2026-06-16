@@ -40,7 +40,6 @@ public class SalesOrderService implements SalesOrderUseCase {
      */
     private final SalesOrderEventPublisher eventPublisher;
     private final ProcurementPort procurementPort;
-    private final ProductionPort productionPort;
     private final ItemPort itemPort;
     private final WarehousePort warehousePort;
 
@@ -163,11 +162,10 @@ public class SalesOrderService implements SalesOrderUseCase {
         so.confirmByHq(currentUser.employeeNumber(), LocalDateTime.now(), routing.reservations());
         repository.save(so);
 
-        // 부족분 소싱 요청: BUY -> 구매요청(PR), MAKE -> 생산요청.
-        if (!routing.toPurchase().isEmpty())
-            procurementPort.requestPurchase(so.soNumber(), so.toWarehouseCode(), routing.toPurchase());
-        if (!routing.toProduce().isEmpty())
-            productionPort.requestProduction(so.soNumber(), so.toWarehouseCode(), routing.toProduce());
+        // 부족분 통지: BUY/MAKE 구분 없이 전량 procurement로. 분기/PO/작업지시는 procurement가.
+        if (!routing.shortfall().isEmpty()) {
+            procurementPort.requestPurchase(so.soNumber(), so.toWarehouseCode(), routing.shortfall());
+        }
 
         if (so.status() == SalesOrderStatus.IN_FULFILLMENT) eventPublisher.publishFulfilling(so.soNumber());
         else eventPublisher.publishBackordered(so.soNumber());
@@ -266,30 +264,20 @@ public class SalesOrderService implements SalesOrderUseCase {
         List<ReservationResult> results = inventoryPort.reserve(so.soNumber(), so.toWarehouseCode(), outstanding);
 
         List<LineReservation> reservations = new ArrayList<>();
-        List<StockTransferLine> toProduce = new ArrayList<>();
-        List<StockTransferLine> toPurchase = new ArrayList<>();
+        List<StockTransferLine> shortfall = new ArrayList<>();
         for (ReservationResult r : results) {
+            reservations.add(new LineReservation(r.sku(), r.reserved(), r.sourceWarehouseCode()));
             int stillShort = r.requested() - r.reserved();
-            FulfillmentSource source = FulfillmentSource.STOCK;
             if (stillShort > 0) {
-                SourcingType type = itemPort.resolveProduct(r.sku()).sourcingType();
-                if (type == SourcingType.MAKE) {
-                    source = FulfillmentSource.PRODUCTION;
-                    toProduce.add(new StockTransferLine(r.sku(), stillShort));
-                } else {
-                    source = FulfillmentSource.PURCHASE;
-                    toPurchase.add(new StockTransferLine(r.sku(), stillShort));
-                }
+                shortfall.add(new StockTransferLine(r.sku(), stillShort)); // buy/make 미결정 - procurement가 판정
             }
-            reservations.add(new LineReservation(r.sku(), r.reserved(), source, r.sourceWarehouseCode()));
         }
-        return new Routing(reservations, toProduce, toPurchase);
+        return new Routing(reservations, shortfall);
     }
 
-    // 부족분 업무 라우팅(생산으로 보낼지 구매로 보낼지 나눔)
+    // 부족분 단일 라우팅(BUY/MAKE 구분 없이 전량 procurement로 통지)
     private record Routing(List<LineReservation> reservations,
-                           List<StockTransferLine> toProduce,
-                           List<StockTransferLine> toPurchase) {
+                           List<StockTransferLine> shortfall) {
     }
 
     /*

@@ -21,7 +21,7 @@ public class SalesOrderLine {
 
     // 라인레벨 충족추적: 재고 확보분 + 부족분 소스(confirm 에서 채워짐).
     private int reservedQuantity = 0;
-    private FulfillmentSource fulfillmentSource;   // null = 미확정(confirm 전)
+    private FulfillmentSource fulfillmentSource;   // null = 미확정(confirm 전). 이후 STOCK 또는 BACKORDER(부족분 소스)
     private String fromWarehouseCode;              // 출발지(출고창고)=소스. confirm 시 재고 확보분에 기록, 전 null
 
     public SalesOrderLine(int lineNo, String sku, String nameSnapshot,
@@ -48,14 +48,26 @@ public class SalesOrderLine {
     }
 
     /**
-     * 예약 반영(가산). 이번 라운드 확보분을 더하고(예약수량 초과하지 않음), 전량 확보되면 source=STOCK, 아니면 부족분 소스로 기록.
+     * 예약 반영(가산). 전량 확보면 STOCK, 부족분 남으면 BACKORDERED(소스 판정은 procurement).
      */
-    public void applyReservation(int reservedDelta, FulfillmentSource shortfallSource, String sourceWarehouseCode) {
+    public void applyReservation(int reservedDelta, String sourceWarehouseCode) {
         this.reservedQuantity = Math.min(quantity, this.reservedQuantity + Math.max(0, reservedDelta));
-        this.fulfillmentSource = (this.reservedQuantity >= quantity) ? FulfillmentSource.STOCK : shortfallSource;
+        this.fulfillmentSource = (this.reservedQuantity >= quantity)
+                ? FulfillmentSource.STOCK : FulfillmentSource.BACKORDERED;
         if (sourceWarehouseCode != null) {
             this.fromWarehouseCode = sourceWarehouseCode;   // 재고 확보분의 출발지(출고창고) 기록
         }
+    }
+
+    /**
+     * 영속 복원 적용(reconstitute): 저장된 상태를 그대로 되살린다(파생 안 함).
+     * applyReservation은 confirm/refulfill 라이브 경로용(STOCK/BACKORDERED 파생)이라
+     * 미확정(source=null) 라인을 BACKORDERED 로 오염시키므로 복원엔 쓰지 않는다.
+     */
+    public void restore(int reservedQuantity, FulfillmentSource fulfillmentSource, String fromWarehouseCode) {
+        this.reservedQuantity = reservedQuantity;
+        this.fulfillmentSource = fulfillmentSource; // NULL/STOCK/BACKORDERED 그대로
+        this.fromWarehouseCode = fromWarehouseCode;
     }
 
     public boolean fullyReserved() { return reservedQuantity >= quantity; }

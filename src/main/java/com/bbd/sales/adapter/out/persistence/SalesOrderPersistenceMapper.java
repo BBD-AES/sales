@@ -54,7 +54,7 @@ public class SalesOrderPersistenceMapper {
                 .map(l -> {
                     SalesOrderLine line = new SalesOrderLine(
                             l.getLineNo(), l.getSku(), l.getNameSnapshot(), l.getUnitPriceSnapshot(), l.getQuantity());
-                    line.applyReservation(l.getReservedQuantity(), l.getFulfillmentSource(), l.getFromWarehouseCode());  // 저장 상태 복원
+                    line.restore(l.getReservedQuantity(), l.getFulfillmentSource(), l.getFromWarehouseCode());  // 저장 상태 복원(파생X)
                     return line;
                 })
                 .toList();
