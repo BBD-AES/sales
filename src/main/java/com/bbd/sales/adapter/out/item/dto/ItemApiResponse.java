@@ -13,5 +13,5 @@ public record ItemApiResponse(
         int unitPrice, // item은 원화 정수
         SourcingType sourcingType, // "MAKE"/"BUY" 문자열 -> sales enum 그대로 역직렬화
         boolean active
-) 
+) {
 }

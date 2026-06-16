@@ -338,10 +338,18 @@ public class SalesOrderService implements SalesOrderUseCase {
 
     private List<SalesOrderLine> toDomainLines(List<SalesOrderLineCommand> lineCommands) {
         List<SalesOrderLine> lines = new ArrayList<>();
+        List<String> inactive = new ArrayList<>();
         int lineNo = 1;
         for (SalesOrderLineCommand lc : lineCommands) {
             ProductSnapshot p = itemPort.resolveProduct(lc.sku());
+            if (!p.active()) {
+                inactive.add(p.sku());
+                continue;
+            }
             lines.add(new SalesOrderLine(lineNo++, p.sku(), p.name(), p.unitPrice(), lc.quantity()));
+        }
+        if (!inactive.isEmpty()) {
+            throw new ApiException(ErrorCode.ITEM_NOT_ORDERABLE, "주문 불가(비활성) SKU: " + String.join(", ", inactive));
         }
         return lines;
     }

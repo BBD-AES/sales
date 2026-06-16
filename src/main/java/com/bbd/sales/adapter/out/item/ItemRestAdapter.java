@@ -31,7 +31,8 @@ public class ItemRestAdapter implements ItemPort {
                 r.sku(),
                 r.name(),
                 BigDecimal.valueOf(r.unitPrice()), // item int(원) -> sales BigDecimal
-                r.sourcingType()
+                r.sourcingType(),
+                r.active()
         );
     }
 }
