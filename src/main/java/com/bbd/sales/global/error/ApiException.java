@@ -17,9 +17,17 @@ public class ApiException extends ErrorResponseException {
      * 에러 응답을 공식적으로 지원한다.
      * 커스텀 예외와 Spring 내장 예외의 응답 형식을 ProblemDetail로 통일할 수 있다.
      */
+    /** 기존 생성자 */
     public ApiException(ErrorCode errorCode) {
         super(errorCode.getStatus(), createBody(errorCode), null);
         this.errorCode = errorCode;
+    }
+    
+    /** 오버로드) 동적 상세(예: SKU 목록)가 필요할 때만 쓴다. */
+    public ApiException(ErrorCode errorCode, String detail) {
+        super(errorCode.getStatus(), createBody(errorCode), null);
+        this.errorCode = errorCode;
+        getBody().setProperty("reason", detail);
     }
 
     /**

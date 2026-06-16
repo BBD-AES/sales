@@ -141,10 +141,18 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     // sku -> 상품 스냅샷 채워 라인 생성
     private List<CustomerOrderLine> toDomainLines(List<CustomerOrderLineCommand> cmds) {
         List<CustomerOrderLine> lines = new ArrayList<>();
+        List<String> inactive = new ArrayList<>();
         int lineNo = 1;
         for (CustomerOrderLineCommand lc : cmds) {
-            ProductSnapshot p = itemPort.resolveProduct(lc.sku());
+            ProductSnapshot p = itemPort.resolveProduct(lc.sku()); // 미존재(404)면 예외 전파(범위 밖)
+            if (!p.active()) {
+                inactive.add(p.sku());
+                continue;
+            }
             lines.add(new CustomerOrderLine(lineNo++, p.sku(), p.name(), p.unitPrice(), lc.quantity()));
+        }
+        if (!inactive.isEmpty()) {
+            throw new ApiException(ErrorCode.ITEM_NOT_ORDERABLE, "주문 불가(비활성) SKU:  " + String.join(", ", inactive));
         }
         return lines;
     }
