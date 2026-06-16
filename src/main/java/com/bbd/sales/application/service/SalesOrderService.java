@@ -35,9 +35,6 @@ public class SalesOrderService implements SalesOrderUseCase {
 
     private final SalesOrderRepository repository;
     private final InventoryPort inventoryPort;
-    /**
-     * 서비스는 인터페이스 타입만 앎. 어떤 구현이 들어올 지는 스프링이 런타임에 주입함. (LoggingSalesOrderEventPublisher -> OutboxSalesOrderEventPublisher로 변경)
-     */
     private final SalesOrderEventPublisher eventPublisher;
     private final ProcurementPort procurementPort;
     private final ItemPort itemPort;
