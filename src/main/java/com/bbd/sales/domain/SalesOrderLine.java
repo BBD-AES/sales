@@ -58,6 +58,17 @@ public class SalesOrderLine {
         }
     }
 
+    /**
+     * 영속 복원 적용(reconstitute): 저장된 상태를 그대로 되살린다(파생 안 함).
+     * applyReservation은 confirm/refulfill 라이브 경로용(STOCK/BACKORDERED 파생)이라
+     * 미확정(source=null) 라인을 BACKORDERED 로 오염시키므로 복원엔 쓰지 않는다.
+     */
+    public void restore(int reservedQuantity, FulfillmentSource fulfillmentSource, String fromWarehouseCode) {
+        this.reservedQuantity = reservedQuantity;
+        this.fulfillmentSource = fulfillmentSource; // NULL/STOCK/BACKORDERED 그대로
+        this.fromWarehouseCode = fromWarehouseCode;
+    }
+
     public boolean fullyReserved() { return reservedQuantity >= quantity; }
     public int shortfall() { return quantity - reservedQuantity; }
 
