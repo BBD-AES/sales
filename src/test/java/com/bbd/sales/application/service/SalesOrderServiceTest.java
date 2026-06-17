@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -146,5 +147,53 @@ class SalesOrderServiceTest {
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.IN_FULFILLMENT);
         verify(eventPublisher).publishFulfilling("SO-1");
+    }
+
+    @Test
+    @DisplayName("receive: IN_FULFILLMENT -> RECEIVED, 재고 이동 호출 + 수령 이벤트")
+    void receive_inFulfillment_transferAndPublishes() {
+        SalesOrder so = submitted("OIL-FLT-001", 10);
+        so.confirmByHq("HQ001", NOW, List.of(new LineReservation("OIL-FLT-001", 10))); // 전량 확보 -> IN_FULFILLMENT
+
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+
+        service.receive("SO-1", STAFF);
+
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.RECEIVED);
+        verify(inventoryPort).transferForSalesOrderReceive(eq("SO-1"), eq("WH-BR-001"), eq("BR003"), anyList());
+        verify(eventPublisher).publishReceived("SO-1");
+    }
+
+    @Test
+    @DisplayName("receive: 재고 이동 실패 시 예외 전파 + 수령 이벤트 미발행(정합성 결속)")
+    void receive_inventoryFails_propagates_noEvent() {
+        SalesOrder so = submitted("OIL-FLT-001", 10);
+        so.confirmByHq("HQ001", NOW, List.of(new LineReservation("OIL-FLT-001", 10)));
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+        doThrow(new RuntimeException("inventory down"))
+                .when(inventoryPort).transferForSalesOrderReceive(any(), any(), any(), anyList());
+
+        assertThatThrownBy(() -> service.receive("SO-1", STAFF))
+                .isInstanceOf(RuntimeException.class);
+
+        // 이동 실패 -> publishReceived 까지 못 감(@Transactional 롤백 결속). 실재고-수령 정합 보장.
+        verify(eventPublisher, never()).publishReceived(any());
+    }
+
+    @Test
+    @DisplayName("fulfillBackorder: 재예약해도 여전히 부족하면 BACKORDERED 유지 + fulfilling 미발행")
+    void fulfillBackorder_stillShort_staysBackordered() {
+        SalesOrder so = submitted("RLY-12V-30A-01", 5);
+        so.confirmByHq("HQ001", NOW, List.of(new LineReservation("RLY-12V-30A-01", 0))); // 전량 부족 -> BACKORDERED
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+        when(inventoryPort.reserve(any(), any(), anyList()))
+                .thenReturn(List.of(new ReservationResult("RLY-12V-30A-01", 5, 2))); // 5 중 2만 확보 -> 여전히 부족
+
+        service.fulfillBackorder("SO-1", HQ);
+
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED); // 상태 유지 확인
+        assertThat(so.lines().get(0).reservedQuantity()).isEqualTo(2);
+        verify(eventPublisher, never()).publishFulfilling(any()); // 전이 안 했으니 미발행
+
     }
 }
