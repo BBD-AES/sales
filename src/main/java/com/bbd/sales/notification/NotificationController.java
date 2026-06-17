@@ -18,9 +18,9 @@ public class NotificationController {
 
     @GetMapping
     public List<Notification> inbox(CurrentUser currentUser) { // 리졸버가 헤더에서 주입
-        if (!currentUser.isHq()) {
-            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_ROLE);
-        }
+//        if (!currentUser.isHq()) {
+//            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_ROLE);
+//        }
         return notifications.findTop100ByTargetRoleAndReadFalseOrderByIdDesc("HQ_MANAGER");
     }
 }

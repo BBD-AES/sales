@@ -48,14 +48,14 @@ public class SalesOrderService implements SalesOrderUseCase {
         // 지점 사용자는 본인 창고만. 본사/관리자는 필터 그대로.
         // 비-HQ인데 warehouseCode가 없으면(헤더 누락 등) fromScope가 null로 풀려 전체가 노출되므로 차단.
         String fromScope = query.toWarehouseCode();
-        if (!query.currentUser().isHq()) {
-            String warehouseCode = query.currentUser().warehouseCode();
-            if (warehouseCode == null || warehouseCode.isBlank()) {
-                // 정상 경로에선 resolver 가 BRANCH_* 창고코드를 이미 강제(401). 여기선 방어용 + 의미상 '인증헤더 누락'.
-                throw new ApiException(ErrorCode.AUTH_HEADER_REQUIRED);
-            }
-            fromScope = warehouseCode;   // 본인 창고로 강제(전달된 필터 무시)
-        }
+//        if (!query.currentUser().isHq()) {
+//            String warehouseCode = query.currentUser().warehouseCode();
+//            if (warehouseCode == null || warehouseCode.isBlank()) {
+//                // 정상 경로에선 resolver 가 BRANCH_* 창고코드를 이미 강제(401). 여기선 방어용 + 의미상 '인증헤더 누락'.
+//                throw new ApiException(ErrorCode.AUTH_HEADER_REQUIRED);
+//            }
+//            fromScope = warehouseCode;   // 본인 창고로 강제(전달된 필터 무시)
+//        }
 
         LocalDateTime from = query.startDate() != null ? query.startDate().atStartOfDay() : null;
         LocalDateTime to = query.endDate() != null ? query.endDate().atTime(LocalTime.MAX) : null;
@@ -84,9 +84,9 @@ public class SalesOrderService implements SalesOrderUseCase {
     @Override
     public SalesOrderResult create(CreateSalesOrderCommand command) {
         CurrentUser user = command.currentUser();
-        if (!user.isAdmin() && !(user.isBranchUser() && command.toWarehouseCode().equals(user.warehouseCode()))) {
-            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
-        }
+//        if (!user.isAdmin() && !(user.isBranchUser() && command.toWarehouseCode().equals(user.warehouseCode()))) {
+//            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
+//        }
 
         List<SalesOrderLine> lines = toDomainLines(command.lines());
         String soNumber = repository.nextSoNumber();
@@ -291,34 +291,34 @@ public class SalesOrderService implements SalesOrderUseCase {
      *       RECEIVED 전이로 통합했기에 별도 ship 권한이 없다(도착확인=지점 몫).
      */
     private void authorizeRead(SalesOrder so, CurrentUser user) {
-        if (user.isHq()) return;
+//        if (user.isHq()) return;
         if (!so.ownedByWarehouse(user.warehouseCode())) {
             throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
         }
     }
 
     private void authorizeOwnerWrite(SalesOrder so, CurrentUser user) {
-        if (user.isAdmin()) return;
-        if (!(user.isBranchUser() && so.ownedByWarehouse(user.warehouseCode()))) {
-            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
-        }
+//        if (user.isAdmin()) return;
+//        if (!(user.isBranchUser() && so.ownedByWarehouse(user.warehouseCode()))) {
+//            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
+//        }
     }
 
     /** 제출(HQ로 올림)은 본인 창고의 지점 관리자(또는 ADMIN). */
     private void authorizeSubmit(SalesOrder so, CurrentUser user) {
-        if (user.isAdmin()) return;
-        if (!user.isBranchManager()) {
-            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_ROLE);
-        }
+//        if (user.isAdmin()) return;
+//        if (!user.isBranchManager()) {
+//            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_ROLE);
+//        }
         if (!so.ownedByWarehouse(user.warehouseCode())) {
             throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
         }
     }
 
     private void authorizeDecision(CurrentUser user) {
-        if (!user.canDecide()) {
-            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_ROLE);
-        }
+//        if (!user.canDecide()) {
+//            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_ROLE);
+//        }
     }
 
     private List<SalesOrderLine> toDomainLines(List<SalesOrderLineCommand> lineCommands) {

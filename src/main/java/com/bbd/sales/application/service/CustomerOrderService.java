@@ -34,14 +34,14 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     @Transactional(readOnly = true)
     public SalesOrderPageResult<CustomerOrderSummaryResult> search(SearchCustomerOrderQuery query) {
         String dealerScope = query.dealerWarehouseCode(); // 딜러 필터
-        if (!query.currentUser().isHq()) {
-            String wc = query.currentUser().warehouseCode();
-            // HQ 아닌데 창고코드 없으면 차단함
-            if (wc == null || wc.isBlank()) {
-                throw new ApiException(ErrorCode.AUTH_HEADER_REQUIRED);
-            }
-            dealerScope = wc; // 볼 수 있는 지점을 본인 지점으로 강제함
-        }
+//        if (!query.currentUser().isHq()) {
+//            String wc = query.currentUser().warehouseCode();
+//            // HQ 아닌데 창고코드 없으면 차단함
+//            if (wc == null || wc.isBlank()) {
+//                throw new ApiException(ErrorCode.AUTH_HEADER_REQUIRED);
+//            }
+//            dealerScope = wc; // 볼 수 있는 지점을 본인 지점으로 강제함
+//        }
         LocalDateTime from = query.startDate() != null ? query.startDate().atStartOfDay() : null; // 날짜 경계 변환
         LocalDateTime to = query.endDate() != null ? query.endDate().atTime(LocalTime.MAX) : null;
         CustomerOrderSearchCriteria criteria = new CustomerOrderSearchCriteria( // 권한 반영된 '순수 필터'로 변환
@@ -66,9 +66,9 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     @Override
     public CustomerOrderResult create(CreateCustomerOrderCommand command) {
         CurrentUser user = command.currentUser();
-        if (!user.isAdmin() && !(user.isBranchUser() && command.dealerWarehouseCode().equals(user.warehouseCode()))) { // 지점유저(본인 지점)만 생성, admin 예외
-            throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
-        }
+//        if (!user.isAdmin() && !(user.isBranchUser() && command.dealerWarehouseCode().equals(user.warehouseCode()))) { // 지점유저(본인 지점)만 생성, admin 예외
+//            throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
+//        }
         List<CustomerOrderLine> lines = toDomainLines(command.lines()); // sku -> 스냅샷 채워 도메인 라인 생성
         String coNumber = repository.nextCoNumber(); // 채번 (CO-2026-xxxx)
         String dealerName = warehousePort.warehouseName(command.dealerWarehouseCode()); // 딜러명 스냅샷
@@ -124,7 +124,7 @@ public class CustomerOrderService implements CustomerOrderUseCase {
 
     // 조회 권한: HQ는 전체, 지점은 본인 것만
     private void authorizeRead(CustomerOrder co, CurrentUser u) { //
-        if (u.isHq()) return;
+//        if (u.isHq()) return;
         if (!co.ownedByWarehouse(u.warehouseCode())) {
             throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
         }
@@ -132,10 +132,10 @@ public class CustomerOrderService implements CustomerOrderUseCase {
 
     // 쓰기 권한: admin 또는 (지점유저 && 본인소유)
     private void authorizeOwnerWrite(CustomerOrder co, CurrentUser u) {
-        if (u.isAdmin()) return;
-        if (!(u.isBranchUser() && co.ownedByWarehouse(u.warehouseCode()))) {
-            throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
-        }
+//        if (u.isAdmin()) return;
+//        if (!(u.isBranchUser() && co.ownedByWarehouse(u.warehouseCode()))) {
+//            throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
+//        }
     }
 
     // sku -> 상품 스냅샷 채워 라인 생성
