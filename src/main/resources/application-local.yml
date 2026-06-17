@@ -48,6 +48,9 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
+inventory:
+  base-url: ${INVENTORY_BASE_URL:http://localhost:8081}
+
 springdoc:
   swagger-ui:
     tags-sorter: alpha
