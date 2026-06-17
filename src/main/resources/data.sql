@@ -31,6 +31,9 @@ ON CONFLICT (so_number) DO NOTHING;
 
 -- FulfillmentSource enum 변경(STOCK/BACKORDERED) self-heal: 옛 CHECK 제약 제거(ddl-auto=update 한계). 테이블 없으면 no-op.
 ALTER TABLE IF EXISTS sales_order_line DROP CONSTRAINT IF EXISTS sales_order_line_fulfillment_source_check;
+-- 옛 enum 값(PURCHASE) self-heal: 리팩터링에서 PURCHASE('부족분 구매 소싱')가 BACKORDERED로 통합됨.
+-- ddl-auto=update는 데이터 값을 못 바꾸므로, 옛 행이 남아 @Enumerated(STRING) valueOf 실패(→400)하기 전에 여기서 보정.
+UPDATE sales_order_line SET fulfillment_source = 'BACKORDERED' WHERE fulfillment_source = 'PURCHASE';
 
 -- 라인 (해당 주문에 라인이 없을 때만 삽입 -> 멱등)
 INSERT INTO sales_order_line (so_number, line_no, sku, name_snapshot, unit_price_snapshot, quantity, reserved_quantity, fulfillment_source, from_warehouse_code)
