@@ -88,6 +88,19 @@ bbd:
 inventory:
   base-url: ${INVENTORY_BASE_URL:http://localhost:8081}
 
+# Actuator 헬스: context-path 하위 노출 → /sales/actuator/health (+ /liveness, /readiness).
+# permit-all-paths 에 /actuator/health(/**) 가 있어 인증 없이 통과.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
 # Swagger
 springdoc:
   swagger-ui:
