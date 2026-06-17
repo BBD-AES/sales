@@ -102,7 +102,7 @@ public class SalesOrderService implements SalesOrderUseCase {
                 user.employeeNumber(), LocalDateTime.now());
 
         SalesOrder saved = repository.save(so);
-        eventPublisher.publishRequested(saved.soNumber());
+//        eventPublisher.publishRequested(saved.soNumber());
         return toResult(saved);
     }
 
@@ -117,7 +117,7 @@ public class SalesOrderService implements SalesOrderUseCase {
 
         so.updateContents(command.priority(), command.note(), newLines); // REQUESTED 검증은 도메인이
         SalesOrder saved = repository.save(so);
-        eventPublisher.publishUpdated(saved.soNumber());
+//        eventPublisher.publishUpdated(saved.soNumber());
         return toResult(saved);
     }
 
@@ -145,7 +145,6 @@ public class SalesOrderService implements SalesOrderUseCase {
         authorizeOwnerWrite(so, currentUser);
         so.cancel(currentUser.employeeNumber(), LocalDateTime.now());
         repository.save(so);
-        eventPublisher.publishCanceled(so.soNumber());
         return statusChange(so, currentUser.employeeNumber(), so.canceledAt(), null);
     }
 
@@ -164,8 +163,8 @@ public class SalesOrderService implements SalesOrderUseCase {
             procurementPort.requestPurchase(so.soNumber(), so.toWarehouseCode(), routing.shortfall());
         }
 
-        if (so.status() == SalesOrderStatus.IN_FULFILLMENT) eventPublisher.publishFulfilling(so.soNumber());
-        else eventPublisher.publishBackordered(so.soNumber());
+//        if (so.status() == SalesOrderStatus.IN_FULFILLMENT) eventPublisher.publishFulfilling(so.soNumber());
+//        else eventPublisher.publishBackordered(so.soNumber());
 
         return statusChange(so, currentUser.employeeNumber(), so.approvedAt(), null);
     }
@@ -183,7 +182,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         repository.save(so);
 
         if (so.status() == SalesOrderStatus.IN_FULFILLMENT) {
-            eventPublisher.publishFulfilling(so.soNumber());
+//            eventPublisher.publishFulfilling(so.soNumber());
             return statusChange(so, currentUser.employeeNumber(), now, null);  // 전이 시각으로
         }
         // 아직 부족하면 BACKORDERED 유지(멱등 재시도 가능). 상태 불변이니 승인 시각 유지.
@@ -196,7 +195,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         authorizeDecision(currentUser);
         so.reject(currentUser.employeeNumber(), reason, LocalDateTime.now()); // 사유 필수 검증은 도메인이
         repository.save(so);
-        eventPublisher.publishRejected(so.soNumber());
+//        eventPublisher.publishRejected(so.soNumber());
         return statusChange(so, currentUser.employeeNumber(), so.rejectedAt(), so.rejectedReason());
     }
 
@@ -214,7 +213,7 @@ public class SalesOrderService implements SalesOrderUseCase {
                 so.soNumber(), so.toWarehouseCode(),
                 currentUser.employeeNumber(), toTransferLines(so));
 
-        eventPublisher.publishReceived(so.soNumber());
+//        eventPublisher.publishReceived(so.soNumber());
         return statusChange(so, currentUser.employeeNumber(), so.receivedAt(), null);
     }
 
