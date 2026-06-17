@@ -47,6 +47,15 @@ spring:
       auto-offset-reset: ${KAFKA_OFFSET_RESET:earliest}
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+bbd:
+  security:
+    enabled: true
+    permit-all-paths:
+      - /actuator/health
+      - /actuator/health/**
+      - /swagger-ui/**
+      - /swagger-ui.html
+      - /v3/api-docs/**
 
 inventory:
   base-url: ${INVENTORY_BASE_URL:http://localhost:8081}
