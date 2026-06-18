@@ -90,20 +90,23 @@ public class SalesOrderService implements SalesOrderUseCase {
     @Override
     public SalesOrderResult create(CreateSalesOrderCommand command) {
         CurrentUser user = command.currentUser();
-//        if (!user.isAdmin() && !(user.isBranchUser() && command.toWarehouseCode().equals(user.warehouseCode()))) {
-//            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
-//        }
+
+        // 창고명 스냅샷: 생성 시점에 한 번 조회(이후 읽기는 원격 호출 0). 출발지(source)는 sales가 저장 안 함.
+        String toName = warehousePort.warehouseName(command.toWarehouseCode());
+
+        // 본인 창고 앞으로만 생성(이름축). ADMIN 예외. 역할(BRANCH_*/ADMIN)은 @RequireRole이 커버.
+        // 가드를 라인 해석/번호 채번 전에 둬 미인가 요청은 item 호출/SO 번호 소모 없이 조기 차단.
+        if (!user.isAdmin() && !(user.isBranchUser() && toName.equals(user.warehouseName()))) {
+            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
+        }
 
         List<SalesOrderLine> lines = toDomainLines(command.lines());
         String soNumber = repository.nextSoNumber();
 
-        // 창고명 스냅샷: 생성 시점에 한 번만 조회해 박는다(이후 읽기는 원격 호출 0).
-        // 출발지(source)는 sales 가 저장하지 않음 -> HQ/충족 단계가 결정.
-        String fromName = warehousePort.warehouseName(command.toWarehouseCode());
 
         SalesOrder so = SalesOrder.request(
                 soNumber,
-                command.toWarehouseCode(), fromName,
+                command.toWarehouseCode(), toName,
                 command.priority(), command.note(), lines,
                 user.employeeNumber(), LocalDateTime.now());
 
