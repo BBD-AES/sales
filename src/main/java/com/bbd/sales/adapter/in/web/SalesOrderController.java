@@ -5,6 +5,10 @@ import com.bbd.sales.application.port.in.SalesOrderUseCase;
 import com.bbd.sales.domain.SalesOrderPriority;
 import com.bbd.sales.domain.SalesOrderStatus;
 import com.bbd.sales.global.security.CurrentUser;
+import com.bbd.securitycore.adapter.in.annotation.RequireRole;
+import com.bbd.securitycore.application.model.CurrentUserSnapshotResult;
+import com.bbd.securitycore.application.port.in.GetCurrentUserSnapshotUseCase;
+import com.bbd.securitycore.domain.UserRole;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -20,6 +24,10 @@ import java.time.LocalDate;
  * CurrentUser 는 ArgumentResolver 가 헤더에서 만들어 주입 -> 헤더 파싱 코드가 사라짐.
  * 컨트롤러는 "변환 + 위임"만 하고 업무 규칙은 일절 갖지 않는다.
  */
+// 인가 정책: 엔드포인트별 @RequireRole 로 역할 게이트.
+//   - RoleAuthorizationAspect(AOP)가 JWT의 UserSnapshot.role 을 검증(메서드 우선, 위반=FORBIDDEN_ROLE).
+//   - 창고 소유권 등 "데이터 단위" 인가는 역할로 못 거르므로 서비스 계층(authorize*)이 담당.
+//   - 신규 엔드포인트는 반드시 @RequireRole 를 직접 달 것(클래스 기본값 없음 = 미부착 시 역할 무제한).
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/sales-orders")
@@ -28,6 +36,8 @@ public class SalesOrderController {
     private final SalesOrderUseCase salesOrderUseCase;
     private final SalesOrderWebMapper webMapper;
 
+    // 조회(목록): 전 직무 허용. 본사=전체 / 지점=본인창고 스코핑은 서비스에서.
+    @RequireRole({UserRole.HQ_MANAGER, UserRole.HQ_STAFF, UserRole.BRANCH_MANAGER, UserRole.BRANCH_STAFF, UserRole.ADMIN})
     @GetMapping
     public SalesOrderPageResponse<SalesOrderSummaryResponse> search(
             @RequestParam(required = false) SalesOrderStatus status,
@@ -46,6 +56,8 @@ public class SalesOrderController {
                         startDate, endDate, page, size, currentUser)));
     }
 
+    // 생성: 지점 사용자(+ADMIN)
+    @RequireRole({UserRole.BRANCH_STAFF, UserRole.BRANCH_MANAGER, UserRole.ADMIN})
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public SalesOrderDetailResponse create(
@@ -56,11 +68,15 @@ public class SalesOrderController {
                 salesOrderUseCase.create(webMapper.toCreateCommand(request, currentUser)));
     }
 
+    // 조회(상세): 전 직무 허용(지점 본인창고 스코핑은 서비스에서)
+    @RequireRole({UserRole.HQ_MANAGER, UserRole.HQ_STAFF, UserRole.BRANCH_MANAGER, UserRole.BRANCH_STAFF, UserRole.ADMIN})
     @GetMapping("/{soNumber}")
     public SalesOrderDetailResponse get(@PathVariable String soNumber, CurrentUser currentUser) {
         return webMapper.toDetailResponse(salesOrderUseCase.get(soNumber, currentUser));
     }
 
+    // 수정: 지점 사용자(+ADMIN), REQUESTED 에서만(상태검증은 도메인)
+    @RequireRole({UserRole.BRANCH_STAFF, UserRole.BRANCH_MANAGER, UserRole.ADMIN})
     @PutMapping("/{soNumber}")
     public SalesOrderDetailResponse update(
             @PathVariable String soNumber,
@@ -71,26 +87,36 @@ public class SalesOrderController {
                 salesOrderUseCase.update(webMapper.toUpdateCommand(soNumber, request, currentUser)));
     }
 
+    // 제출(->HQ): 지점 관리자(+ADMIN)
+    @RequireRole({UserRole.BRANCH_MANAGER, UserRole.ADMIN})
     @PatchMapping("/{soNumber}/submit")
     public SalesOrderStatusChangeResponse submit(@PathVariable String soNumber, CurrentUser currentUser) {
         return webMapper.toStatusChangeResponse(salesOrderUseCase.submit(soNumber, currentUser));
     }
 
+    // 취소: 지점 사용자(+ADMIN)
+    @RequireRole({UserRole.BRANCH_STAFF, UserRole.BRANCH_MANAGER, UserRole.ADMIN})
     @PatchMapping("/{soNumber}/cancel")
     public SalesOrderStatusChangeResponse cancel(@PathVariable String soNumber, CurrentUser currentUser) {
         return webMapper.toStatusChangeResponse(salesOrderUseCase.cancel(soNumber, currentUser));
     }
 
+    // 승인: 본사 관리자(+ADMIN)
+    @RequireRole({UserRole.HQ_MANAGER, UserRole.ADMIN})
     @PatchMapping("/{soNumber}/approve")
     public SalesOrderStatusChangeResponse approve(@PathVariable String soNumber, CurrentUser currentUser) {
         return webMapper.toStatusChangeResponse(salesOrderUseCase.approve(soNumber, currentUser));
     }
 
+    // 백오더 충족(HQ 결정의 연속): 본사 관리자(+ADMIN)
+    @RequireRole({UserRole.HQ_MANAGER, UserRole.ADMIN})
     @PatchMapping("/{soNumber}/fulfill-backorder")
     public SalesOrderStatusChangeResponse fulfillBackorder(@PathVariable String soNumber, CurrentUser currentUser) {
         return webMapper.toStatusChangeResponse(salesOrderUseCase.fulfillBackorder(soNumber, currentUser));
     }
 
+    // 반려: 본사 관리자(+ADMIN)
+    @RequireRole({UserRole.HQ_MANAGER, UserRole.ADMIN})
     @PatchMapping("/{soNumber}/reject")
     public SalesOrderStatusChangeResponse reject(
             @PathVariable String soNumber,
@@ -101,6 +127,8 @@ public class SalesOrderController {
                 salesOrderUseCase.reject(soNumber, request.reason(), currentUser));
     }
 
+    // 수령(도착확인): 지점 사용자(+ADMIN)
+    @RequireRole({UserRole.BRANCH_STAFF, UserRole.BRANCH_MANAGER, UserRole.ADMIN})
     @PatchMapping("/{soNumber}/receive")
     public SalesOrderStatusChangeResponse receive(@PathVariable String soNumber, CurrentUser currentUser) {
         return webMapper.toStatusChangeResponse(salesOrderUseCase.receive(soNumber, currentUser));

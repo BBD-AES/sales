@@ -290,7 +290,7 @@ public class SalesOrderService implements SalesOrderUseCase {
      *       RECEIVED 전이로 통합했기에 별도 ship 권한이 없다(도착확인=지점 몫).
      */
     private void authorizeRead(SalesOrder so, CurrentUser user) {
-//        if (user.isHq()) return;
+        if (user.isHq()) return;   // 본사(ADMIN/HQ_*)는 전 창고 조회 — 창고 비스코핑
         if (!so.ownedByWarehouse(user.warehouseCode())) {
             throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
         }
