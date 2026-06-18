@@ -9,8 +9,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 /**
  * 출고 요청 영속 엔티티(애그리거트 영속 모델).
@@ -92,10 +91,43 @@ public class SalesOrderJpaEntity {
      *    흐려진다. 호출자는 @Transactional 메서드 안에서 이 메서드를 호출해야 한다.
      */
     public void replaceLines(List<SalesOrderLineJpaEntity> newLines) {
-        this.lines.clear();
-        for (SalesOrderLineJpaEntity line : newLines) {
-            line.setSalesOrder(this);
-            this.lines.add(line);
+        // lineNo 기준 in-place 병합.
+        // 요청 라인은 서비스에서 1부터 다시 번호가 매겨진다.
+        // 따라서 여기서의 lineNo는 "라인의 영구 식별자"라기보다 현재 주문 라인의 순서 슬롯에 가깝다.
+
+        // clear() + add()로 전체 교체하지 않는다.(금지)
+        // Hibernate가 기존 라인 DELETE보다 새 라인 INSERT를 먼저 flush할 수 있고,
+        // 이 경우 같은 (so_number, line_no)가 잠시 중복되어 uq_sales_order_line 제약에 걸릴 수 있다.
+
+        // 기존 영속 라인을 lineNo 슬롯 기준으로 찾기 위한 map.
+        // 같은 lineNo 슬롯이 새 요청에도 있으면 기존 row를 재사용해 UPDATE한다.
+        Map<Integer, SalesOrderLineJpaEntity> existing = new HashMap<>();
+        for (SalesOrderLineJpaEntity l : this.lines) existing.put(l.getLineNo(), l);
+
+        // 새 요청이 차지하는 lineNo 슬롯 집합.
+        Set<Integer> incoming = new HashSet<>();
+        for (SalesOrderLineJpaEntity in : newLines) incoming.add(in.getLineNo());
+
+        // 새 요청에 포함되지 않은 lineNo 슬롯 제거.
+        // orphanRemoval=true라서 컬렉션에서 빠진 managed child는 flush 시 DELETE된다.
+        this.lines.removeIf(l -> !incoming.contains(l.getLineNo())); // 빠진 라인 -> orphan DELETE
+
+        // removeIf 이후 this.lines에는 새 요청에도 남아 있는 기존 라인만 남는다.
+        // 따라서 이 시점의 this.lines 개수는 newLines 개수보다 클 수 없다.
+        for (SalesOrderLineJpaEntity in : newLines) {
+            SalesOrderLineJpaEntity ex = existing.get(in.getLineNo());
+            if (ex == null) {
+                // 기존에 없던 lineNo 슬롯이면 새 row로 추가한다.
+                // 예: 기존 2개에서 새 요청 3개로 늘어난 경우 lineNo=3.
+                in.setSalesOrder(this);
+                this.lines.add(in);
+            } else {
+                // 기존에 있던 lineNo 슬롯이면 row를 재사용하고 내용만 갱신한다.
+                // SKU가 같다는 뜻이 아니다. 같은 순서 위치의 row를 UPDATE하는 것이다.
+                // 예: 기존 2번 라인의 SKU가 B였고 새 요청의 2번 라인이 C여도,
+                // DB row는 유지되고 sku/name/price/quantity만 UPDATE된다.
+                ex.copyMutableForm(in);
+            }
         }
     }
 }

@@ -333,6 +333,7 @@ public class SalesOrderService implements SalesOrderUseCase {
                 inactive.add(p.sku());
                 continue;
             }
+            // 사용자가 입력한 순서대로 라인 번호 저장
             lines.add(new SalesOrderLine(lineNo++, p.sku(), p.name(), p.unitPrice(), lc.quantity()));
         }
         if (!inactive.isEmpty()) {
