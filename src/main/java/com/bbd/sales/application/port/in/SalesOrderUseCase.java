@@ -7,7 +7,6 @@ import com.bbd.sales.application.result.SalesOrderPageResult;
 import com.bbd.sales.application.result.SalesOrderResult;
 import com.bbd.sales.application.result.SalesOrderStatusChangeResult;
 import com.bbd.sales.application.result.SalesOrderSummaryResult;
-import com.bbd.sales.global.security.CurrentUser;
 
 /**
  * 인바운드(구동) 포트 = "이 애플리케이션으로 무엇을 할 수 있는가"의 계약.
@@ -20,22 +19,22 @@ public interface SalesOrderUseCase {
 
     SalesOrderResult create(CreateSalesOrderCommand command);
 
-    SalesOrderResult get(String soNumber, CurrentUser currentUser);
+    SalesOrderResult get(String soNumber);
 
     SalesOrderResult update(UpdateSalesOrderCommand command);
 
     /** 지점 관리자가 HQ로 제출(REQUESTED -> SUBMITTED). */
-    SalesOrderStatusChangeResult submit(String soNumber, CurrentUser currentUser);
+    SalesOrderStatusChangeResult submit(String soNumber);
 
-    SalesOrderStatusChangeResult cancel(String soNumber, CurrentUser currentUser);
+    SalesOrderStatusChangeResult cancel(String soNumber);
 
     /** HQ 승인(SUBMITTED -> IN_FULFILLMENT, 재고 부족 시 BACKORDERED). */
-    SalesOrderStatusChangeResult approve(String soNumber, CurrentUser currentUser);
+    SalesOrderStatusChangeResult approve(String soNumber);
 
     /** PO 입고 후 백오더 해소(BACKORDERED -> IN_FULFILLMENT). */
-    SalesOrderStatusChangeResult fulfillBackorder(String soNumber, CurrentUser currentUser);
+    SalesOrderStatusChangeResult fulfillBackorder(String soNumber);
 
-    SalesOrderStatusChangeResult reject(String soNumber, String reason, CurrentUser currentUser);
+    SalesOrderStatusChangeResult reject(String soNumber, String reason);
 
-    SalesOrderStatusChangeResult receive(String soNumber, CurrentUser currentUser);
+    SalesOrderStatusChangeResult receive(String soNumber);
 }

@@ -39,13 +39,14 @@ public class SalesOrderService implements SalesOrderUseCase {
     private final ProcurementPort procurementPort;
     private final ItemPort itemPort;
     private final WarehousePort warehousePort;
+    private final CurrentUserProvider currentUserProvider;
 
     // ============================ 조회 ============================
 
     @Override
     @Transactional(readOnly = true)
     public SalesOrderPageResult<SalesOrderSummaryResult> search(SearchSalesOrderQuery query) {
-        CurrentUser user = query.currentUser();
+        CurrentUser user = currentUserProvider.current();
         // 본사/관리자: 전달된 창고 코드 필터 그대로. 지점: 본인 창고로 강제(이름축), 전달된 필터는 무시.
         String codeFilter; // HQ 선택 필터(코드축)
         String nameScope; // 지점 강제 스코핑(이름축)
@@ -79,9 +80,9 @@ public class SalesOrderService implements SalesOrderUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public SalesOrderResult get(String soNumber, CurrentUser currentUser) {
+    public SalesOrderResult get(String soNumber) {
         SalesOrder so = load(soNumber);
-        authorizeRead(so, currentUser); // 지점=본인창고만(이름축), HQ/ADMIN=전체.
+        authorizeRead(so, currentUserProvider.current()); // 지점=본인창고만(이름축), HQ/ADMIN=전체.
         return toResult(so);
     }
 
@@ -89,7 +90,7 @@ public class SalesOrderService implements SalesOrderUseCase {
 
     @Override
     public SalesOrderResult create(CreateSalesOrderCommand command) {
-        CurrentUser user = command.currentUser();
+        CurrentUser user = currentUserProvider.current();
 
         // 창고명 스냅샷: 생성 시점에 한 번 조회(이후 읽기는 원격 호출 0). 출발지(source)는 sales가 저장 안 함.
         String toName = warehousePort.warehouseName(command.toWarehouseCode());
@@ -111,14 +112,13 @@ public class SalesOrderService implements SalesOrderUseCase {
                 user.employeeNumber(), LocalDateTime.now());
 
         SalesOrder saved = repository.save(so);
-//        eventPublisher.publishRequested(saved.soNumber());
         return toResult(saved);
     }
 
     @Override
     public SalesOrderResult update(UpdateSalesOrderCommand command) {
         SalesOrder so = load(command.soNumber());
-        authorizeOwnerWrite(so, command.currentUser());
+        authorizeOwnerWrite(so, currentUserProvider.current());
 
         List<SalesOrderLine> newLines = command.hasLineReplacement()
                 ? toDomainLines(command.lines())
@@ -126,7 +126,6 @@ public class SalesOrderService implements SalesOrderUseCase {
 
         so.updateContents(command.priority(), command.note(), newLines); // REQUESTED 검증은 도메인이
         SalesOrder saved = repository.save(so);
-//        eventPublisher.publishUpdated(saved.soNumber());
         return toResult(saved);
     }
 
@@ -135,30 +134,28 @@ public class SalesOrderService implements SalesOrderUseCase {
 
     /** 헥사고날에서 필요성: 포트만 의존 -> 구현이 뭐든 무관*/
     @Override
-    public SalesOrderStatusChangeResult submit(String soNumber, CurrentUser currentUser) {
+    public SalesOrderStatusChangeResult submit(String soNumber) {
         SalesOrder so = load(soNumber);
-        authorizeSubmit(so, currentUser);
+        authorizeSubmit(so, currentUserProvider.current());
         LocalDateTime now = LocalDateTime.now();
         so.submit(now);                          // REQUESTED 검증은 도메인이
         repository.save(so);
-        // TODO: 현재는 SO id만 보내고 있지만, payload에 풍부한 데이터를 담아야 할 때 (객체상태포함) 데이터를 통째로 스냅샷으로 고정해야함(나중에 조회할때 상태 바뀐 상황 예방)
-        // eventPublisher.publishSubmitted(new SalesOrderSubmittedEvent(
-        //        so.soNumber(), so.requestedBy(), so.lines(), so.status(), now));
         eventPublisher.publishSubmitted(so.soNumber());
-        return statusChange(so, currentUser.employeeNumber(), now, null);
+        return statusChange(so, currentUserProvider.current().employeeNumber(), now, null);
     }
 
     @Override
-    public SalesOrderStatusChangeResult cancel(String soNumber, CurrentUser currentUser) {
+    public SalesOrderStatusChangeResult cancel(String soNumber) {
         SalesOrder so = load(soNumber);
-        authorizeOwnerWrite(so, currentUser);
-        so.cancel(currentUser.employeeNumber(), LocalDateTime.now());
+        authorizeOwnerWrite(so, currentUserProvider.current());
+        so.cancel(currentUserProvider.current().employeeNumber(), LocalDateTime.now());
         repository.save(so);
-        return statusChange(so, currentUser.employeeNumber(), so.canceledAt(), null);
+        return statusChange(so, currentUserProvider.current().employeeNumber(), so.canceledAt(), null);
     }
 
     @Override
-    public SalesOrderStatusChangeResult approve(String soNumber, CurrentUser currentUser) {
+    public SalesOrderStatusChangeResult approve(String soNumber) {
+        CurrentUser currentUser = currentUserProvider.current();
         SalesOrder so = load(soNumber);
         authorizeDecision(currentUser);
         requireHqDecidable(so); // 외부 예약 호출 전 상태 선검증(예약 후 도메인 throw 시 고아 예약 방지)
@@ -172,14 +169,12 @@ public class SalesOrderService implements SalesOrderUseCase {
             procurementPort.requestPurchase(so.soNumber(), so.toWarehouseCode(), routing.shortfall());
         }
 
-//        if (so.status() == SalesOrderStatus.IN_FULFILLMENT) eventPublisher.publishFulfilling(so.soNumber());
-//        else eventPublisher.publishBackordered(so.soNumber());
-
         return statusChange(so, currentUser.employeeNumber(), so.approvedAt(), null);
     }
 
     @Override
-    public SalesOrderStatusChangeResult fulfillBackorder(String soNumber, CurrentUser currentUser) {
+    public SalesOrderStatusChangeResult fulfillBackorder(String soNumber) {
+        CurrentUser currentUser = currentUserProvider.current();
         SalesOrder so = load(soNumber);
         authorizeDecision(currentUser);
         requireBackordered(so); // 외부 예약 호출 전 상태 선검증
@@ -199,17 +194,18 @@ public class SalesOrderService implements SalesOrderUseCase {
     }
 
     @Override
-    public SalesOrderStatusChangeResult reject(String soNumber, String reason, CurrentUser currentUser) {
+    public SalesOrderStatusChangeResult reject(String soNumber, String reason) {
+        CurrentUser currentUser = currentUserProvider.current();
         SalesOrder so = load(soNumber);
         authorizeDecision(currentUser);
         so.reject(currentUser.employeeNumber(), reason, LocalDateTime.now()); // 사유 필수 검증은 도메인이
         repository.save(so);
-//        eventPublisher.publishRejected(so.soNumber());
         return statusChange(so, currentUser.employeeNumber(), so.rejectedAt(), so.rejectedReason());
     }
 
     @Override
-    public SalesOrderStatusChangeResult receive(String soNumber, CurrentUser currentUser) {
+    public SalesOrderStatusChangeResult receive(String soNumber) {
+        CurrentUser currentUser = currentUserProvider.current();
         SalesOrder so = load(soNumber);
         authorizeOwnerWrite(so, currentUser);
 

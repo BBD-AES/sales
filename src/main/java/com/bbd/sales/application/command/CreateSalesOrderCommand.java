@@ -1,7 +1,6 @@
 package com.bbd.sales.application.command;
 
 import com.bbd.sales.domain.SalesOrderPriority;
-import com.bbd.sales.global.security.CurrentUser;
 
 import java.util.List;
 
@@ -13,7 +12,6 @@ public record CreateSalesOrderCommand(
         String toWarehouseCode,
         SalesOrderPriority priority,
         String note,
-        List<SalesOrderLineCommand> lines,
-        CurrentUser currentUser
+        List<SalesOrderLineCommand> lines
 ) {
 }

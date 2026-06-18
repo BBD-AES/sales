@@ -37,6 +37,7 @@ import static org.mockito.Mockito.when;
 /**
  * SalesOrderService 유스케이스 단위테스트.
  * out 포트를 Mockito 목으로 두고 오케스트레이션 분기(전량예약 / 부족분 BUY·MAKE / 권한·상태 가드)를 검증한다.
+ * 신원은 CurrentUserProvider(목)로 주입한다 — 컨트롤러 파라미터가 아니라 서버측 취득.
  * DB·스프링 컨텍스트 없이 순수 협력 검증.
  */
 @ExtendWith(MockitoExtension.class)
@@ -54,6 +55,8 @@ class SalesOrderServiceTest {
     WarehousePort warehousePort;
     @Mock
     ProcurementPort procurementPort;
+    @Mock
+    CurrentUserProvider currentUserProvider;
 
     @InjectMocks
     SalesOrderService service;
@@ -80,11 +83,12 @@ class SalesOrderServiceTest {
     @DisplayName("approve: 전량 가용 -> IN_FULFILLMENT, 생산/구매 호출 없음")
     void approve_allReserved_inFulfillment() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
+        when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
         when(inventoryPort.reserve(eq("SO-1"), eq("WH-BR-001"), anyList()))
                 .thenReturn(List.of(new ReservationResult("OIL-FLT-001", 10, 10)));
 
-        service.approve("SO-1", HQ);
+        service.approve("SO-1");
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.IN_FULFILLMENT);
         assertThat(so.lines().get(0).fulfillmentSource()).isEqualTo(FulfillmentSource.STOCK);
@@ -95,11 +99,12 @@ class SalesOrderServiceTest {
     @DisplayName("approve: 부족분 BUY -> BACKORDERED + 구매요청(PR), 생산 호출 없음")
     void approve_shortfallBuy_requestsPurchase() {
         SalesOrder so = submitted("RLY-12V-30A-01", 5);
+        when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
         when(inventoryPort.reserve(any(), any(), anyList()))
                 .thenReturn(List.of(new ReservationResult("RLY-12V-30A-01", 5, 0)));
 
-        service.approve("SO-1", HQ);
+        service.approve("SO-1");
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED);
         assertThat(so.lines().get(0).reservedQuantity()).isZero();
@@ -111,11 +116,12 @@ class SalesOrderServiceTest {
     @DisplayName("approve: 부족분 MAKE -> BACKORDERED + procurement 통지(buy/make는 procurement)")
     void approve_shortfallMake_requestsProduction() {
         SalesOrder so = submitted("CLT-DSK-MED-01", 3);
+        when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
         when(inventoryPort.reserve(any(), any(), anyList()))
                 .thenReturn(List.of(new ReservationResult("CLT-DSK-MED-01", 3, 1)));
 
-        service.approve("SO-1", HQ);
+        service.approve("SO-1");
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED);
         assertThat(so.lines().get(0).fulfillmentSource()).isEqualTo(FulfillmentSource.BACKORDERED);
@@ -129,7 +135,7 @@ class SalesOrderServiceTest {
         SalesOrder so = submitted("OIL-FLT-001", 10);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
-        assertThatThrownBy(() -> service.approve("SO-1", STAFF))
+        assertThatThrownBy(() -> service.approve("SO-1"))
                 .isInstanceOf(ApiException.class);
 
         verify(inventoryPort, never()).reserve(any(), any(), anyList());
@@ -142,9 +148,10 @@ class SalesOrderServiceTest {
                 SalesOrderPriority.NORMAL, null,
                 List.of(new SalesOrderLine(1, "OIL-FLT-001", "상품", new BigDecimal("1000"), 10)),
                 "BR003", NOW); // REQUESTED(미제출)
+        when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(requested));
 
-        assertThatThrownBy(() -> service.approve("SO-1", HQ))
+        assertThatThrownBy(() -> service.approve("SO-1"))
                 .isInstanceOf(SalesOrderStateException.class);
 
         verify(inventoryPort, never()).reserve(any(), any(), anyList());
@@ -155,11 +162,12 @@ class SalesOrderServiceTest {
     void fulfillBackorder_reserved_inFulfillment() {
         SalesOrder so = submitted("RLY-12V-30A-01", 5);
         so.confirmByHq("HQ001", NOW, List.of(new LineReservation("RLY-12V-30A-01", 0))); // reserved=0 -> BACKORDERED
+        when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
         when(inventoryPort.reserve(any(), any(), anyList()))
                 .thenReturn(List.of(new ReservationResult("RLY-12V-30A-01", 5, 5)));
 
-        service.fulfillBackorder("SO-1", HQ);
+        service.fulfillBackorder("SO-1");
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.IN_FULFILLMENT);
     }
@@ -169,10 +177,10 @@ class SalesOrderServiceTest {
     void receive_inFulfillment_transferAndPublishes() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
         so.confirmByHq("HQ001", NOW, List.of(new LineReservation("OIL-FLT-001", 10))); // 전량 확보 -> IN_FULFILLMENT
-
+        when(currentUserProvider.current()).thenReturn(STAFF);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
-        service.receive("SO-1", STAFF);
+        service.receive("SO-1");
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.RECEIVED);
         verify(inventoryPort).transferForSalesOrderReceive(eq("SO-1"), eq("WH-BR-001"), eq("BR003"), anyList());
@@ -183,11 +191,12 @@ class SalesOrderServiceTest {
     void receive_inventoryFails_propagates_noEvent() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
         so.confirmByHq("HQ001", NOW, List.of(new LineReservation("OIL-FLT-001", 10)));
+        when(currentUserProvider.current()).thenReturn(STAFF);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
         doThrow(new RuntimeException("inventory down"))
                 .when(inventoryPort).transferForSalesOrderReceive(any(), any(), any(), anyList());
 
-        assertThatThrownBy(() -> service.receive("SO-1", STAFF))
+        assertThatThrownBy(() -> service.receive("SO-1"))
                 .isInstanceOf(RuntimeException.class);
 
     }
@@ -197,11 +206,12 @@ class SalesOrderServiceTest {
     void fulfillBackorder_stillShort_staysBackordered() {
         SalesOrder so = submitted("RLY-12V-30A-01", 5);
         so.confirmByHq("HQ001", NOW, List.of(new LineReservation("RLY-12V-30A-01", 0))); // 전량 부족 -> BACKORDERED
+        when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
         when(inventoryPort.reserve(any(), any(), anyList()))
                 .thenReturn(List.of(new ReservationResult("RLY-12V-30A-01", 5, 2))); // 5 중 2만 확보 -> 여전히 부족
 
-        service.fulfillBackorder("SO-1", HQ);
+        service.fulfillBackorder("SO-1");
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED); // 상태 유지 확인
         assertThat(so.lines().get(0).reservedQuantity()).isEqualTo(2);
@@ -212,11 +222,12 @@ class SalesOrderServiceTest {
     @Test
     @DisplayName("search: 지점은 본인 창고(이름)로 강제, 전달한 코드필터 무시")
     void search_branch_scopedToOwnWarehouseName() {
+        when(currentUserProvider.current()).thenReturn(STAFF);
         when(repository.search(any(), anyInt(), anyInt()))
                 .thenReturn(new SalesOrderPage(List.of(), 0L, 0, 20));
         // 지점이 타지점 코드로 필터 시도
         SearchSalesOrderQuery q = new SearchSalesOrderQuery(
-                null, null, "WH-BR-999", null, null, null, 0, 20, STAFF
+                null, null, "WH-BR-999", null, null, null, 0, 20
         );
 
         service.search(q);
@@ -230,10 +241,11 @@ class SalesOrderServiceTest {
     @Test
     @DisplayName("search: HQ는 전달한 코드 필터 사용, 이름 스코핑 없음")
     void search_hq_usesCodeFilter() {
+        when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.search(any(), anyInt(), anyInt()))
                 .thenReturn(new SalesOrderPage(List.of(), 0L, 0, 20));
         SearchSalesOrderQuery q = new SearchSalesOrderQuery(
-                null, null, "WH-BR-002", null, null, null, 0, 20, HQ
+                null, null, "WH-BR-002", null, null, null, 0, 20
         );
 
         service.search(q);
@@ -248,9 +260,10 @@ class SalesOrderServiceTest {
     @DisplayName("get: 지점이 타지점 SO 상세 조회 -> FORBIDDEN")
     void get_branch_otherWarehouse_forbidden() {
         SalesOrder so = submitted("OIL-FLT-001", 10); // 강남 1지점
+        when(currentUserProvider.current()).thenReturn(OTHER_BRANCH);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
-        assertThatThrownBy(() -> service.get("SO-1", OTHER_BRANCH))
+        assertThatThrownBy(() -> service.get("SO-1"))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -258,18 +271,20 @@ class SalesOrderServiceTest {
     @DisplayName("get: 지점이 본인 창고 SO 상세 조회 OK")
     void get_branch_ownWarehouse_ok() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
+        when(currentUserProvider.current()).thenReturn(STAFF);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
-        assertThat(service.get("SO-1", STAFF).soNumber()).isEqualTo("SO-1");
+        assertThat(service.get("SO-1").soNumber()).isEqualTo("SO-1");
     }
 
     @Test
     @DisplayName("get: HQ는 어느 지점 SO든 조회 OK")
     void get_hq_anyWarehouse_ok() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
+        when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
-        assertThat(service.get("SO-1", HQ).soNumber()).isEqualTo("SO-1");
+        assertThat(service.get("SO-1").soNumber()).isEqualTo("SO-1");
     }
 
     // ===== 쓰기 소유권 =====
@@ -278,9 +293,10 @@ class SalesOrderServiceTest {
     @DisplayName("cancel: 타지점 사용자 -> FORBIDDEN, 저장 안 함")
     void cancel_otherBranch_forbidden_noSave() {
         SalesOrder so = submitted("OIL-FLT-001", 10); // 강남
+        when(currentUserProvider.current()).thenReturn(OTHER_BRANCH);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
-        assertThatThrownBy(() -> service.cancel("SO-1", OTHER_BRANCH))
+        assertThatThrownBy(() -> service.cancel("SO-1"))
                 .isInstanceOf(ApiException.class);
         verify(repository, never()).save(any());
     }
@@ -289,9 +305,10 @@ class SalesOrderServiceTest {
     @DisplayName("cancel: 본인 창고 지점 사용자 OK")
     void cancel_ownBranch_ok() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
+        when(currentUserProvider.current()).thenReturn(STAFF);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
-        service.cancel("SO-1", STAFF);
+        service.cancel("SO-1");
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.CANCELED);
     }
@@ -300,9 +317,10 @@ class SalesOrderServiceTest {
     @DisplayName("cancel: ADMIN은 소유권 무관 OK")
     void cancel_admin_bypassesOwnership() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
+        when(currentUserProvider.current()).thenReturn(ADMIN);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
-        service.cancel("SO-1", ADMIN);
+        service.cancel("SO-1");
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.CANCELED);
     }
@@ -311,9 +329,10 @@ class SalesOrderServiceTest {
     @DisplayName("update: 타지점 사용자 -> FORBIDDEN, 저장 안 함")
     void update_otherBranch_forbidden_noSave() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
+        when(currentUserProvider.current()).thenReturn(OTHER_BRANCH);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
         UpdateSalesOrderCommand cmd = new UpdateSalesOrderCommand(
-                "SO-1", SalesOrderPriority.URGENT, "메모", null, OTHER_BRANCH);
+                "SO-1", SalesOrderPriority.URGENT, "메모", null);
 
         assertThatThrownBy(() -> service.update(cmd))
                 .isInstanceOf(ApiException.class);
@@ -324,9 +343,10 @@ class SalesOrderServiceTest {
     @DisplayName("receive: 타지점 사용자 -> FORBIDDEN, 재고이동 호출 안 함")
     void receive_otherBranch_forbidden_noTransfer() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
+        when(currentUserProvider.current()).thenReturn(OTHER_BRANCH);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
-        assertThatThrownBy(() -> service.receive("SO-1", OTHER_BRANCH))
+        assertThatThrownBy(() -> service.receive("SO-1"))
                 .isInstanceOf(ApiException.class);
         verify(inventoryPort, never()).transferForSalesOrderReceive(any(), any(), any(), anyList());
     }
@@ -336,6 +356,7 @@ class SalesOrderServiceTest {
     @Test
     @DisplayName("create: 본인 창고 앞으로 생성 OK")
     void create_ownWarehouse_ok() {
+        when(currentUserProvider.current()).thenReturn(STAFF);
         when(warehousePort.warehouseName("WH-BR-001")).thenReturn("강남 1지점");
         when(itemPort.resolveProduct("OIL-FLT-001"))
                 .thenReturn(new ProductSnapshot("OIL-FLT-001", "오일필터", new BigDecimal("1000"), true));
@@ -343,7 +364,7 @@ class SalesOrderServiceTest {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         CreateSalesOrderCommand cmd = new CreateSalesOrderCommand(
                 "WH-BR-001", SalesOrderPriority.NORMAL, "메모",
-                List.of(new SalesOrderLineCommand("OIL-FLT-001", 10)), STAFF);
+                List.of(new SalesOrderLineCommand("OIL-FLT-001", 10)));
 
         assertThat(service.create(cmd).soNumber()).isEqualTo("SO-9");
     }
@@ -351,10 +372,11 @@ class SalesOrderServiceTest {
     @Test
     @DisplayName("create: 타 지점 앞으로 생성 -> FORBIDDEN, item 조회·저장 안 함")
     void create_otherWarehouse_forbidden() {
+        when(currentUserProvider.current()).thenReturn(STAFF); // STAFF=강남
         when(warehousePort.warehouseName("WH-BR-002")).thenReturn("분당 1지점");
         CreateSalesOrderCommand cmd = new CreateSalesOrderCommand(
                 "WH-BR-002", SalesOrderPriority.NORMAL, null,
-                List.of(new SalesOrderLineCommand("OIL-FLT-001", 10)), STAFF); // STAFF=강남
+                List.of(new SalesOrderLineCommand("OIL-FLT-001", 10)));
 
         assertThatThrownBy(() -> service.create(cmd)).isInstanceOf(ApiException.class);
         verify(itemPort, never()).resolveProduct(any());
@@ -364,6 +386,7 @@ class SalesOrderServiceTest {
     @Test
     @DisplayName("create: ADMIN은 어느 창고든 생성 OK")
     void create_admin_anyWarehouse_ok() {
+        when(currentUserProvider.current()).thenReturn(ADMIN);
         when(warehousePort.warehouseName("WH-BR-003")).thenReturn("부산 1지점");
         when(itemPort.resolveProduct("OIL-FLT-001"))
                 .thenReturn(new ProductSnapshot("OIL-FLT-001", "오일필터", new BigDecimal("1000"), true));
@@ -371,7 +394,7 @@ class SalesOrderServiceTest {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         CreateSalesOrderCommand cmd = new CreateSalesOrderCommand(
                 "WH-BR-003", SalesOrderPriority.NORMAL, null,
-                List.of(new SalesOrderLineCommand("OIL-FLT-001", 10)), ADMIN);
+                List.of(new SalesOrderLineCommand("OIL-FLT-001", 10)));
 
         assertThat(service.create(cmd).soNumber()).isEqualTo("SO-9");
     }
