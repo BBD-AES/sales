@@ -1,5 +1,7 @@
 package com.bbd.sales.application.service;
 
+import com.bbd.sales.application.command.CreateSalesOrderCommand;
+import com.bbd.sales.application.command.SalesOrderLineCommand;
 import com.bbd.sales.application.port.out.*;
 import com.bbd.sales.application.command.SearchSalesOrderQuery;
 import com.bbd.sales.application.command.UpdateSalesOrderCommand;
@@ -206,6 +208,7 @@ class SalesOrderServiceTest {
 
     }
 
+    // === 읽기 스코핑 ===
     @Test
     @DisplayName("search: 지점은 본인 창고(이름)로 강제, 전달한 코드필터 무시")
     void search_branch_scopedToOwnWarehouseName() {
@@ -241,8 +244,6 @@ class SalesOrderServiceTest {
         assertThat(captor.getValue().toWarehouseName()).isNull();
     }
 
-    // --- 복붙 ---
-
     @Test
     @DisplayName("get: 지점이 타지점 SO 상세 조회 -> FORBIDDEN")
     void get_branch_otherWarehouse_forbidden() {
@@ -271,7 +272,7 @@ class SalesOrderServiceTest {
         assertThat(service.get("SO-1", HQ).soNumber()).isEqualTo("SO-1");
     }
 
-// ===== 쓰기 소유권 (Step 2) =====
+    // ===== 쓰기 소유권 =====
 
     @Test
     @DisplayName("cancel: 타지점 사용자 -> FORBIDDEN, 저장 안 함")
@@ -328,5 +329,50 @@ class SalesOrderServiceTest {
         assertThatThrownBy(() -> service.receive("SO-1", OTHER_BRANCH))
                 .isInstanceOf(ApiException.class);
         verify(inventoryPort, never()).transferForSalesOrderReceive(any(), any(), any(), anyList());
+    }
+
+    // ===== 생성 소유권 (Step 3) =====
+
+    @Test
+    @DisplayName("create: 본인 창고 앞으로 생성 OK")
+    void create_ownWarehouse_ok() {
+        when(warehousePort.warehouseName("WH-BR-001")).thenReturn("강남 1지점");
+        when(itemPort.resolveProduct("OIL-FLT-001"))
+                .thenReturn(new ProductSnapshot("OIL-FLT-001", "오일필터", new BigDecimal("1000"), true));
+        when(repository.nextSoNumber()).thenReturn("SO-9");
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        CreateSalesOrderCommand cmd = new CreateSalesOrderCommand(
+                "WH-BR-001", SalesOrderPriority.NORMAL, "메모",
+                List.of(new SalesOrderLineCommand("OIL-FLT-001", 10)), STAFF);
+
+        assertThat(service.create(cmd).soNumber()).isEqualTo("SO-9");
+    }
+
+    @Test
+    @DisplayName("create: 타 지점 앞으로 생성 -> FORBIDDEN, item 조회·저장 안 함")
+    void create_otherWarehouse_forbidden() {
+        when(warehousePort.warehouseName("WH-BR-002")).thenReturn("분당 1지점");
+        CreateSalesOrderCommand cmd = new CreateSalesOrderCommand(
+                "WH-BR-002", SalesOrderPriority.NORMAL, null,
+                List.of(new SalesOrderLineCommand("OIL-FLT-001", 10)), STAFF); // STAFF=강남
+
+        assertThatThrownBy(() -> service.create(cmd)).isInstanceOf(ApiException.class);
+        verify(itemPort, never()).resolveProduct(any());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("create: ADMIN은 어느 창고든 생성 OK")
+    void create_admin_anyWarehouse_ok() {
+        when(warehousePort.warehouseName("WH-BR-003")).thenReturn("부산 1지점");
+        when(itemPort.resolveProduct("OIL-FLT-001"))
+                .thenReturn(new ProductSnapshot("OIL-FLT-001", "오일필터", new BigDecimal("1000"), true));
+        when(repository.nextSoNumber()).thenReturn("SO-9");
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        CreateSalesOrderCommand cmd = new CreateSalesOrderCommand(
+                "WH-BR-003", SalesOrderPriority.NORMAL, null,
+                List.of(new SalesOrderLineCommand("OIL-FLT-001", 10)), ADMIN);
+
+        assertThat(service.create(cmd).soNumber()).isEqualTo("SO-9");
     }
 }
