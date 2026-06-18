@@ -3,6 +3,7 @@ package com.bbd.sales.application.service;
 import com.bbd.sales.application.command.CreateCustomerOrderCommand;
 import com.bbd.sales.application.command.CustomerOrderLineCommand;
 import com.bbd.sales.application.command.UpdateCustomerOrderCommand;
+import com.bbd.sales.application.port.out.CurrentUserProvider;
 import com.bbd.sales.application.port.out.CustomerOrderRepository;
 import com.bbd.sales.application.port.out.ItemPort;
 import com.bbd.sales.application.port.out.ProductSnapshot;
@@ -38,8 +39,9 @@ import static org.mockito.Mockito.*;
 
 /**
  * CustomerOrderService 유스케이스 단위테스트.
- * out 포트(CustomerOrderRepository, ItemPort/WarehousePort)를 Mockito 목으로 두고
+ * out 포트(CustomerOrderRepository, ItemPort/WarehousePort, CurrentUserProvider)를 Mockito 목으로 두고
  * 생성/조회 권한·상태전이 위임·라인 교체 분기·404 로드 실패를 검증한다.
+ * 신원은 CurrentUserProvider(목)로 주입 — 컨트롤러 파라미터가 아니라 서버측 취득.
  * DB·스프링 컨텍스트 없이 순수 협력 검증.
  */
 @ExtendWith(MockitoExtension.class)
@@ -48,6 +50,7 @@ class CustomerOrderServiceTest {
     @Mock CustomerOrderRepository repository;
     @Mock ItemPort itemPort;
     @Mock WarehousePort warehousePort;
+    @Mock CurrentUserProvider currentUserProvider;
 
     @InjectMocks CustomerOrderService service;
 
@@ -79,9 +82,9 @@ class CustomerOrderServiceTest {
     void create_happyPath() {
         CreateCustomerOrderCommand command = new CreateCustomerOrderCommand(
                 WH, "홍길동", "010-1234-5678", "메모",
-                List.of(new CustomerOrderLineCommand("OIL-FLT-001", 2)),
-                BRANCH);
+                List.of(new CustomerOrderLineCommand("OIL-FLT-001", 2)));
 
+        when(currentUserProvider.current()).thenReturn(BRANCH);
         when(itemPort.resolveProduct("OIL-FLT-001"))
                 .thenReturn(new ProductSnapshot("OIL-FLT-001", "오일필터", new BigDecimal("1500")));
         when(repository.nextCoNumber()).thenReturn("CO-2026-0001");
@@ -118,9 +121,9 @@ class CustomerOrderServiceTest {
     void create_admin_otherWarehouseAllowed() {
         CreateCustomerOrderCommand command = new CreateCustomerOrderCommand(
                 "WH-BR-777", "홍길동", "010-1234-5678", "메모",
-                List.of(new CustomerOrderLineCommand("OIL-FLT-001", 1)),
-                ADMIN);
+                List.of(new CustomerOrderLineCommand("OIL-FLT-001", 1)));
 
+        when(currentUserProvider.current()).thenReturn(ADMIN);
         when(itemPort.resolveProduct("OIL-FLT-001"))
                 .thenReturn(new ProductSnapshot("OIL-FLT-001", "오일필터", new BigDecimal("1000")));
         when(repository.nextCoNumber()).thenReturn("CO-2026-0002");
@@ -140,8 +143,7 @@ class CustomerOrderServiceTest {
     void create_branchUser_otherWarehouse_forbidden() {
         CreateCustomerOrderCommand command = new CreateCustomerOrderCommand(
                 "WH-BR-999", "홍길동", "010-1234-5678", "메모",
-                List.of(new CustomerOrderLineCommand("OIL-FLT-001", 1)),
-                BRANCH); // BRANCH.warehouseCode = WH-BR-001 != WH-BR-999, admin 아님
+                List.of(new CustomerOrderLineCommand("OIL-FLT-001", 1)));
 
         assertThatThrownBy(() -> service.create(command))
                 .isInstanceOf(ApiException.class)
@@ -164,7 +166,7 @@ class CustomerOrderServiceTest {
         CustomerOrder co = open("CO-2026-0001");
         when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(co));
 
-        CustomerOrderResult result = service.get("CO-2026-0001", HQ);
+        CustomerOrderResult result = service.get("CO-2026-0001");
 
         assertThat(result.coNumber()).isEqualTo("CO-2026-0001");
         assertThat(result.dealerWarehouseCode()).isEqualTo(WH);
@@ -174,9 +176,10 @@ class CustomerOrderServiceTest {
     @DisplayName("get: 지점유저는 본인 소유 수주 조회 통과")
     void get_branchUser_ownWarehouse_passes() {
         CustomerOrder co = open("CO-2026-0001");
+        when(currentUserProvider.current()).thenReturn(BRANCH);
         when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(co));
 
-        CustomerOrderResult result = service.get("CO-2026-0001", BRANCH);
+        CustomerOrderResult result = service.get("CO-2026-0001");
 
         assertThat(result.coNumber()).isEqualTo("CO-2026-0001");
     }
@@ -185,9 +188,10 @@ class CustomerOrderServiceTest {
     @DisplayName("get: 지점유저가 타 지점 수주를 조회하면 FORBIDDEN_WAREHOUSE")
     void get_branchUser_otherWarehouse_forbidden() {
         CustomerOrder co = open("CO-2026-0001");
+        when(currentUserProvider.current()).thenReturn(OTHER_BRANCH);
         when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(co));
 
-        assertThatThrownBy(() -> service.get("CO-2026-0001", OTHER_BRANCH))
+        assertThatThrownBy(() -> service.get("CO-2026-0001"))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
@@ -202,7 +206,7 @@ class CustomerOrderServiceTest {
     void get_notFound_throws() {
         when(repository.findByCoNumber("CO-NONE")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.get("CO-NONE", HQ))
+        assertThatThrownBy(() -> service.get("CO-NONE"))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CUSTOMER_ORDER_NOT_FOUND);
@@ -216,10 +220,11 @@ class CustomerOrderServiceTest {
     @DisplayName("confirm: OPEN -> CONFIRMED 전이 후 저장, 상태변경 결과 반환")
     void confirm_open_toConfirmed() {
         CustomerOrder co = open("CO-2026-0001");
+        when(currentUserProvider.current()).thenReturn(BRANCH);
         when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(co));
         when(repository.save(co)).thenReturn(co);
 
-        CustomerOrderStatusChangeResult result = service.confirm("CO-2026-0001", BRANCH);
+        CustomerOrderStatusChangeResult result = service.confirm("CO-2026-0001");
 
         assertThat(co.status()).isEqualTo(CustomerOrderStatus.CONFIRMED);
         assertThat(co.confirmedBy()).isEqualTo("BR003");
@@ -233,11 +238,12 @@ class CustomerOrderServiceTest {
     @Test
     @DisplayName("confirm: ADMIN은 타 지점 수주도 확정 가능(쓰기 권한 admin 분기)")
     void confirm_admin_otherWarehouseAllowed() {
-        CustomerOrder co = open("CO-2026-0001"); // WH 소유, ADMIN은 warehouseCode=null
+        CustomerOrder co = open("CO-2026-0001"); // WH 소유, ADMIN은 warehouseName=null
+        when(currentUserProvider.current()).thenReturn(ADMIN);
         when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(co));
         when(repository.save(co)).thenReturn(co);
 
-        CustomerOrderStatusChangeResult result = service.confirm("CO-2026-0001", ADMIN);
+        CustomerOrderStatusChangeResult result = service.confirm("CO-2026-0001");
 
         assertThat(co.status()).isEqualTo(CustomerOrderStatus.CONFIRMED);
         assertThat(co.confirmedBy()).isEqualTo("AD001");
@@ -250,10 +256,11 @@ class CustomerOrderServiceTest {
     @DisplayName("cancel: OPEN -> CANCELED 전이 후 저장, 상태변경 결과 반환")
     void cancel_open_toCanceled() {
         CustomerOrder co = open("CO-2026-0001");
+        when(currentUserProvider.current()).thenReturn(BRANCH);
         when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(co));
         when(repository.save(co)).thenReturn(co);
 
-        CustomerOrderStatusChangeResult result = service.cancel("CO-2026-0001", BRANCH);
+        CustomerOrderStatusChangeResult result = service.cancel("CO-2026-0001");
 
         assertThat(co.status()).isEqualTo(CustomerOrderStatus.CANCELED);
         assertThat(co.canceledBy()).isEqualTo("BR003");
@@ -267,10 +274,11 @@ class CustomerOrderServiceTest {
     void cancel_confirmed_toCanceled() {
         CustomerOrder co = open("CO-2026-0001");
         co.confirm("BR003", NOW); // CONFIRMED 선행
+        when(currentUserProvider.current()).thenReturn(BRANCH);
         when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(co));
         when(repository.save(co)).thenReturn(co);
 
-        CustomerOrderStatusChangeResult result = service.cancel("CO-2026-0001", BRANCH);
+        CustomerOrderStatusChangeResult result = service.cancel("CO-2026-0001");
 
         assertThat(co.status()).isEqualTo(CustomerOrderStatus.CANCELED);
         assertThat(co.canceledBy()).isEqualTo("BR003");
@@ -284,10 +292,11 @@ class CustomerOrderServiceTest {
     void close_confirmed_toClosed() {
         CustomerOrder co = open("CO-2026-0001");
         co.confirm("BR003", NOW); // CONFIRMED 선행 (close는 CONFIRMED에서만 가능)
+        when(currentUserProvider.current()).thenReturn(BRANCH);
         when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(co));
         when(repository.save(co)).thenReturn(co);
 
-        CustomerOrderStatusChangeResult result = service.close("CO-2026-0001", BRANCH);
+        CustomerOrderStatusChangeResult result = service.close("CO-2026-0001");
 
         assertThat(co.status()).isEqualTo(CustomerOrderStatus.CLOSED);
         assertThat(co.closedBy()).isEqualTo("BR003");
@@ -300,9 +309,10 @@ class CustomerOrderServiceTest {
     @DisplayName("close: OPEN 상태면 도메인 상태규칙 위반(CustomerOrderStateException) 전파, 저장 안 함")
     void close_open_domainStateViolation_noSave() {
         CustomerOrder co = open("CO-2026-0001"); // OPEN, close는 CONFIRMED에서만 가능
+        when(currentUserProvider.current()).thenReturn(BRANCH);
         when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(co));
 
-        assertThatThrownBy(() -> service.close("CO-2026-0001", BRANCH))
+        assertThatThrownBy(() -> service.close("CO-2026-0001"))
                 .isInstanceOf(CustomerOrderStateException.class)
                 .extracting("violation")
                 .isEqualTo(CustomerOrderStateException.Violation.NOT_CLOSABLE);
@@ -318,7 +328,7 @@ class CustomerOrderServiceTest {
         CustomerOrder co = open("CO-2026-0001");
         when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(co));
 
-        assertThatThrownBy(() -> service.confirm("CO-2026-0001", OTHER_BRANCH))
+        assertThatThrownBy(() -> service.confirm("CO-2026-0001"))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
@@ -337,9 +347,9 @@ class CustomerOrderServiceTest {
         CustomerOrder co = open("CO-2026-0001");
         UpdateCustomerOrderCommand command = new UpdateCustomerOrderCommand(
                 "CO-2026-0001", "수정메모",
-                List.of(new CustomerOrderLineCommand("RLY-12V-30A-01", 5)),
-                BRANCH);
+                List.of(new CustomerOrderLineCommand("RLY-12V-30A-01", 5)));
 
+        when(currentUserProvider.current()).thenReturn(BRANCH);
         when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(co));
         when(itemPort.resolveProduct("RLY-12V-30A-01"))
                 .thenReturn(new ProductSnapshot("RLY-12V-30A-01", "릴레이", new BigDecimal("8500")));
@@ -363,8 +373,9 @@ class CustomerOrderServiceTest {
     void update_withoutLineReplacement_keepsLines() {
         CustomerOrder co = open("CO-2026-0001");
         UpdateCustomerOrderCommand command = new UpdateCustomerOrderCommand(
-                "CO-2026-0001", "메모만수정", null, BRANCH);
+                "CO-2026-0001", "메모만수정", null);
 
+        when(currentUserProvider.current()).thenReturn(BRANCH);
         when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(co));
         when(repository.save(co)).thenReturn(co);
 
@@ -385,7 +396,7 @@ class CustomerOrderServiceTest {
     void update_otherBranch_forbidden() {
         CustomerOrder co = open("CO-2026-0001");
         UpdateCustomerOrderCommand command = new UpdateCustomerOrderCommand(
-                "CO-2026-0001", "메모", null, OTHER_BRANCH);
+                "CO-2026-0001", "메모", null);
 
         when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(co));
 

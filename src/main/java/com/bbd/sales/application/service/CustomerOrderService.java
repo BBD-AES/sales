@@ -29,6 +29,7 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     private final CustomerOrderRepository repository; // 구현(JPA어댑터)은 모르는 채로,out 포트(인터페이스)에만 의존
     private final ItemPort itemPort;
     private final WarehousePort warehousePort;
+    private final CurrentUserProvider currentUserProvider; // 신원은 JWT에서 서버측 취득(컨트롤러 파라미터 아님)
 
     @Override
     @Transactional(readOnly = true)
@@ -56,16 +57,16 @@ public class CustomerOrderService implements CustomerOrderUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public CustomerOrderResult get(String coNumber, CurrentUser currentUser) {
+    public CustomerOrderResult get(String coNumber) {
         CustomerOrder co = load(coNumber); // 없으면 404
-        authorizeRead(co, currentUser); // HQ는 전체, 그 외는 지점 본인 것만
+        authorizeRead(co, currentUserProvider.current()); // HQ는 전체, 그 외는 지점 본인 것만
         return toResult(co); // 도메인 -> 상세 result
     }
 
 
     @Override
     public CustomerOrderResult create(CreateCustomerOrderCommand command) {
-        CurrentUser user = command.currentUser();
+        CurrentUser user = currentUserProvider.current();
 //        if (!user.isAdmin() && !(user.isBranchUser() && command.dealerWarehouseCode().equals(user.warehouseCode()))) { // 지점유저(본인 지점)만 생성, admin 예외
 //            throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
 //        }
@@ -82,14 +83,15 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     @Override
     public CustomerOrderResult update(UpdateCustomerOrderCommand command) {
         CustomerOrder co = load(command.coNumber());
-        authorizeOwnerWrite(co, command.currentUser()); // 본인 지점/admin만 쓰기
+        authorizeOwnerWrite(co, currentUserProvider.current()); // 본인 지점/admin만 쓰기
         List<CustomerOrderLine> newLines = command.hasLineReplacement() ? toDomainLines(command.lines()) : null; // lines != null일 때만 교체
         co.updateContents(command.note(), newLines); // RECEIVED에서만 쓸 수 있다는 규칙은 도메인이 가짐
         return toResult(repository.save(co));
     }
 
     @Override
-    public CustomerOrderStatusChangeResult confirm(String coNumber, CurrentUser u) {
+    public CustomerOrderStatusChangeResult confirm(String coNumber) {
+        CurrentUser u = currentUserProvider.current();
         CustomerOrder co = load(coNumber);
         authorizeOwnerWrite(co, u);
         co.confirm(u.employeeNumber(), LocalDateTime.now()); // 상태전이 규칙(canConfirm)은 도메인이 가짐
@@ -99,7 +101,8 @@ public class CustomerOrderService implements CustomerOrderUseCase {
 
     // cancel / close 동일 패턴(도메인 cancel()/close()에 규칙 위임 후 저장)
     @Override
-    public CustomerOrderStatusChangeResult cancel(String coNumber, CurrentUser u) {
+    public CustomerOrderStatusChangeResult cancel(String coNumber) {
+        CurrentUser u = currentUserProvider.current();
         CustomerOrder co = load(coNumber);
         authorizeOwnerWrite(co, u);
         co.cancel(u.employeeNumber(), LocalDateTime.now());
@@ -108,7 +111,8 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     }
 
     @Override
-    public CustomerOrderStatusChangeResult close(String coNumber, CurrentUser currentUser) {
+    public CustomerOrderStatusChangeResult close(String coNumber) {
+        CurrentUser currentUser = currentUserProvider.current();
         CustomerOrder co = load(coNumber);
         authorizeOwnerWrite(co, currentUser);
         co.close(currentUser.employeeNumber(), LocalDateTime.now());
