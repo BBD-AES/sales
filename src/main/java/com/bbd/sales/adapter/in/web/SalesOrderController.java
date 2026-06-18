@@ -87,6 +87,13 @@ public class SalesOrderController {
         return webMapper.toStatusChangeResponse(salesOrderUseCase.submit(soNumber));
     }
 
+    // 제출 회수(->REQUESTED): 지점 관리자(+ADMIN). 제출을 되돌려 수정 가능 상태로.
+    @RequireRole({UserRole.BRANCH_MANAGER, UserRole.ADMIN})
+    @PatchMapping("/{soNumber}/withdraw")
+    public SalesOrderStatusChangeResponse withdraw(@PathVariable String soNumber) {
+        return webMapper.toStatusChangeResponse(salesOrderUseCase.withdraw(soNumber));
+    }
+
     // 취소: 지점 사용자(+ADMIN)
     @RequireRole({UserRole.BRANCH_STAFF, UserRole.BRANCH_MANAGER, UserRole.ADMIN})
     @PatchMapping("/{soNumber}/cancel")

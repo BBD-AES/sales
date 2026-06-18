@@ -398,4 +398,30 @@ class SalesOrderServiceTest {
 
         assertThat(service.create(cmd).soNumber()).isEqualTo("SO-9");
     }
+
+    @Test
+    @DisplayName("withdraw: SUBMITTED -> REQUESTED (수정 위해 회수)")
+    void withdraw_submitted_toRequested() {
+        SalesOrder so = submitted("OIL-FLT-001", 10); // SUBMITTED, 강남 소유
+        when(currentUserProvider.current()).thenReturn(STAFF);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+
+        service.withdraw("SO-1");
+
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.REQUESTED);
+    }
+
+    @Test
+    @DisplayName("withdraw: SUBMITTED 아니면 NOT_WITHDRAWABLE")
+    void withdraw_notSubmitted_throws() {
+        SalesOrder requested = SalesOrder.request("SO-1", "WH-BR-001", "강남 1지점",
+                SalesOrderPriority.NORMAL, null,
+                List.of(new SalesOrderLine(1, "OIL-FLT-001", "상품", new BigDecimal("1000"), 10)),
+                "BR003", NOW); // REQUESTED
+        when(currentUserProvider.current()).thenReturn(STAFF);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(requested));
+
+        assertThatThrownBy(() -> service.withdraw("SO-1"))
+                .isInstanceOf(SalesOrderStateException.class);
+    }
 }

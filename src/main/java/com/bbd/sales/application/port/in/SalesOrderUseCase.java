@@ -26,6 +26,9 @@ public interface SalesOrderUseCase {
     /** 지점 관리자가 HQ로 제출(REQUESTED -> SUBMITTED). */
     SalesOrderStatusChangeResult submit(String soNumber);
 
+    /** 제출 회수(SUBMITTED -> REQUESTED). 요청자가 수정하려 되돌림. */
+    SalesOrderStatusChangeResult withdraw(String soNumber);
+
     SalesOrderStatusChangeResult cancel(String soNumber);
 
     /** HQ 승인(SUBMITTED -> IN_FULFILLMENT, 재고 부족 시 BACKORDERED). */

@@ -145,6 +145,17 @@ public class SalesOrderService implements SalesOrderUseCase {
     }
 
     @Override
+    public SalesOrderStatusChangeResult withdraw(String soNumber) {
+        CurrentUser currentUser = currentUserProvider.current();
+        SalesOrder so = load(soNumber);
+        authorizeOwnerWrite(so, currentUser); // 본인 지점 소유(취소와 동일 가드). 외부 호출 0(예약 전 상태).
+        LocalDateTime now = LocalDateTime.now();
+        so.withdraw(now);
+        repository.save(so);
+        return statusChange(so, currentUser.employeeNumber(), now, null);
+    }
+
+    @Override
     public SalesOrderStatusChangeResult cancel(String soNumber) {
         SalesOrder so = load(soNumber);
         authorizeOwnerWrite(so, currentUserProvider.current());

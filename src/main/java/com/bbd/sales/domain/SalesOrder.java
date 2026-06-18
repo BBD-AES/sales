@@ -1,6 +1,7 @@
 package com.bbd.sales.domain;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -160,6 +161,15 @@ public class SalesOrder {
             throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_SUBMITTABLE);
         }
         this.status = SalesOrderStatus.SUBMITTED;
+    }
+
+    /** 제출 회수. SUBMITTED → REQUESTED (HQ 결정 전, 요청자가 수정하려 되돌림). */
+    public void withdraw(LocalDateTime now) {
+        if (!status.canWithdraw()) {
+            throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_WITHDRAWABLE);
+        }
+        this.status = SalesOrderStatus.REQUESTED;
+        // TODO(audit): withdrawnBy/At 컬럼은 submit 감사 컬럼과 함께 별도 커밋.
     }
 
     /** 취소. REQUESTED/SUBMITTED 에서만(요청자 본인 회수, HQ 손에 넘어가기 전까지). */
