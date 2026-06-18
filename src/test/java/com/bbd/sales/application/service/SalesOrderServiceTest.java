@@ -1,6 +1,8 @@
 package com.bbd.sales.application.service;
 
 import com.bbd.sales.application.port.out.*;
+import com.bbd.sales.application.command.SearchSalesOrderQuery;
+import com.bbd.sales.application.command.UpdateSalesOrderCommand;
 import com.bbd.sales.domain.*;
 import com.bbd.sales.global.error.ApiException;
 import com.bbd.sales.global.security.CurrentUser;
@@ -11,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
@@ -23,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -36,20 +40,31 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class SalesOrderServiceTest {
 
-    @Mock SalesOrderRepository repository;
-    @Mock InventoryPort inventoryPort;
-    @Mock SalesOrderEventPublisher eventPublisher;
-    @Mock ItemPort itemPort;
-    @Mock WarehousePort warehousePort;
-    @Mock ProcurementPort procurementPort;
+    @Mock
+    SalesOrderRepository repository;
+    @Mock
+    InventoryPort inventoryPort;
+    @Mock
+    SalesOrderEventPublisher eventPublisher;
+    @Mock
+    ItemPort itemPort;
+    @Mock
+    WarehousePort warehousePort;
+    @Mock
+    ProcurementPort procurementPort;
 
-    @InjectMocks SalesOrderService service;
+    @InjectMocks
+    SalesOrderService service;
 
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 6, 3, 10, 0);
     private static final CurrentUser HQ = new CurrentUser("HQ001", RoleType.HQ_MANAGER, null);
-    private static final CurrentUser STAFF = new CurrentUser("BR003", RoleType.BRANCH_STAFF, "WH-BR-001");
+    private static final CurrentUser ADMIN = new CurrentUser("AD001", RoleType.ADMIN, null);
+    private static final CurrentUser STAFF = new CurrentUser("BR003", RoleType.BRANCH_STAFF, "강남 1지점");
+    private static final CurrentUser OTHER_BRANCH = new CurrentUser("BR009", RoleType.BRANCH_STAFF, "분당 1지점");
 
-    /** SUBMITTED 상태의 단일 라인 출고요청. */
+    /**
+     * SUBMITTED 상태의 단일 라인 출고요청.
+     */
     private SalesOrder submitted(String sku, int qty) {
         SalesOrder so = SalesOrder.request("SO-1", "WH-BR-001", "강남 1지점",
                 SalesOrderPriority.NORMAL, null,
@@ -189,5 +204,129 @@ class SalesOrderServiceTest {
         assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED); // 상태 유지 확인
         assertThat(so.lines().get(0).reservedQuantity()).isEqualTo(2);
 
+    }
+
+    @Test
+    @DisplayName("search: 지점은 본인 창고(이름)로 강제, 전달한 코드필터 무시")
+    void search_branch_scopedToOwnWarehouseName() {
+        when(repository.search(any(), anyInt(), anyInt()))
+                .thenReturn(new SalesOrderPage(List.of(), 0L, 0, 20));
+        // 지점이 타지점 코드로 필터 시도
+        SearchSalesOrderQuery q = new SearchSalesOrderQuery(
+                null, null, "WH-BR-999", null, null, null, 0, 20, STAFF
+        );
+
+        service.search(q);
+
+        ArgumentCaptor<SalesOrderSearchCriteria> captor = ArgumentCaptor.forClass(SalesOrderSearchCriteria.class);
+        verify(repository).search(captor.capture(), anyInt(), anyInt());
+        assertThat(captor.getValue().toWarehouseName()).isEqualTo("강남 1지점"); // 본인 창고로 강제
+        assertThat(captor.getValue().toWarehouseCode()).isNull(); // 넘긴 WH-BR-999 무시
+    }
+
+    @Test
+    @DisplayName("search: HQ는 전달한 코드 필터 사용, 이름 스코핑 없음")
+    void search_hq_usesCodeFilter() {
+        when(repository.search(any(), anyInt(), anyInt()))
+                .thenReturn(new SalesOrderPage(List.of(), 0L, 0, 20));
+        SearchSalesOrderQuery q = new SearchSalesOrderQuery(
+                null, null, "WH-BR-002", null, null, null, 0, 20, HQ
+        );
+
+        service.search(q);
+
+        ArgumentCaptor<SalesOrderSearchCriteria> captor = ArgumentCaptor.forClass(SalesOrderSearchCriteria.class);
+        verify(repository).search(captor.capture(), anyInt(), anyInt());
+        assertThat(captor.getValue().toWarehouseCode()).isEqualTo("WH-BR-002");
+        assertThat(captor.getValue().toWarehouseName()).isNull();
+    }
+
+    // --- 복붙 ---
+
+    @Test
+    @DisplayName("get: 지점이 타지점 SO 상세 조회 -> FORBIDDEN")
+    void get_branch_otherWarehouse_forbidden() {
+        SalesOrder so = submitted("OIL-FLT-001", 10); // 강남 1지점
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+
+        assertThatThrownBy(() -> service.get("SO-1", OTHER_BRANCH))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    @DisplayName("get: 지점이 본인 창고 SO 상세 조회 OK")
+    void get_branch_ownWarehouse_ok() {
+        SalesOrder so = submitted("OIL-FLT-001", 10);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+
+        assertThat(service.get("SO-1", STAFF).soNumber()).isEqualTo("SO-1");
+    }
+
+    @Test
+    @DisplayName("get: HQ는 어느 지점 SO든 조회 OK")
+    void get_hq_anyWarehouse_ok() {
+        SalesOrder so = submitted("OIL-FLT-001", 10);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+
+        assertThat(service.get("SO-1", HQ).soNumber()).isEqualTo("SO-1");
+    }
+
+// ===== 쓰기 소유권 (Step 2) =====
+
+    @Test
+    @DisplayName("cancel: 타지점 사용자 -> FORBIDDEN, 저장 안 함")
+    void cancel_otherBranch_forbidden_noSave() {
+        SalesOrder so = submitted("OIL-FLT-001", 10); // 강남
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+
+        assertThatThrownBy(() -> service.cancel("SO-1", OTHER_BRANCH))
+                .isInstanceOf(ApiException.class);
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("cancel: 본인 창고 지점 사용자 OK")
+    void cancel_ownBranch_ok() {
+        SalesOrder so = submitted("OIL-FLT-001", 10);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+
+        service.cancel("SO-1", STAFF);
+
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.CANCELED);
+    }
+
+    @Test
+    @DisplayName("cancel: ADMIN은 소유권 무관 OK")
+    void cancel_admin_bypassesOwnership() {
+        SalesOrder so = submitted("OIL-FLT-001", 10);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+
+        service.cancel("SO-1", ADMIN);
+
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.CANCELED);
+    }
+
+    @Test
+    @DisplayName("update: 타지점 사용자 -> FORBIDDEN, 저장 안 함")
+    void update_otherBranch_forbidden_noSave() {
+        SalesOrder so = submitted("OIL-FLT-001", 10);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+        UpdateSalesOrderCommand cmd = new UpdateSalesOrderCommand(
+                "SO-1", SalesOrderPriority.URGENT, "메모", null, OTHER_BRANCH);
+
+        assertThatThrownBy(() -> service.update(cmd))
+                .isInstanceOf(ApiException.class);
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("receive: 타지점 사용자 -> FORBIDDEN, 재고이동 호출 안 함")
+    void receive_otherBranch_forbidden_noTransfer() {
+        SalesOrder so = submitted("OIL-FLT-001", 10);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+
+        assertThatThrownBy(() -> service.receive("SO-1", OTHER_BRANCH))
+                .isInstanceOf(ApiException.class);
+        verify(inventoryPort, never()).transferForSalesOrderReceive(any(), any(), any(), anyList());
     }
 }

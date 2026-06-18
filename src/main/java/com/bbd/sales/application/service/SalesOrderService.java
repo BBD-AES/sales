@@ -45,24 +45,29 @@ public class SalesOrderService implements SalesOrderUseCase {
     @Override
     @Transactional(readOnly = true)
     public SalesOrderPageResult<SalesOrderSummaryResult> search(SearchSalesOrderQuery query) {
-        // 지점 사용자는 본인 창고만. 본사/관리자는 필터 그대로.
-        // 비-HQ인데 warehouseCode가 없으면(헤더 누락 등) fromScope가 null로 풀려 전체가 노출되므로 차단.
-        String fromScope = query.toWarehouseCode();
-//        if (!query.currentUser().isHq()) {
-//            String warehouseCode = query.currentUser().warehouseCode();
-//            if (warehouseCode == null || warehouseCode.isBlank()) {
-//                // 정상 경로에선 resolver 가 BRANCH_* 창고코드를 이미 강제(401). 여기선 방어용 + 의미상 '인증헤더 누락'.
-//                throw new ApiException(ErrorCode.AUTH_HEADER_REQUIRED);
-//            }
-//            fromScope = warehouseCode;   // 본인 창고로 강제(전달된 필터 무시)
-//        }
+        CurrentUser user = query.currentUser();
+        // 본사/관리자: 전달된 창고 코드 필터 그대로. 지점: 본인 창고로 강제(이름축), 전달된 필터는 무시.
+        String codeFilter; // HQ 선택 필터(코드축)
+        String nameScope; // 지점 강제 스코핑(이름축)
+        if (user.isHq()) {
+            codeFilter = query.toWarehouseCode();
+            nameScope = null;
+        } else {
+            String warehouseName = user.warehouseName();
+            if (warehouseName == null || warehouseName.isBlank()) {
+                // 정상 경로에선 resolver 가 BRANCH의 tenancyName을 항상 채움. 방어용(인증 컨텍스트 불완전(.
+                throw new ApiException(ErrorCode.AUTH_HEADER_REQUIRED);
+            }
+            codeFilter = null; // 지점이 넘긴 코드 필터 무시 -> 타지점 열람 차단
+            nameScope = warehouseName;
+        }
 
         LocalDateTime from = query.startDate() != null ? query.startDate().atStartOfDay() : null;
         LocalDateTime to = query.endDate() != null ? query.endDate().atTime(LocalTime.MAX) : null;
 
         SalesOrderSearchCriteria criteria = new SalesOrderSearchCriteria(
-                query.status(), query.priority(), fromScope,
-                null,
+                query.status(), query.priority(), codeFilter,
+                nameScope,
                 query.requestedBy(), from, to);
 
         SalesOrderPage page = repository.search(criteria, query.page(), query.size());
@@ -76,7 +81,7 @@ public class SalesOrderService implements SalesOrderUseCase {
     @Transactional(readOnly = true)
     public SalesOrderResult get(String soNumber, CurrentUser currentUser) {
         SalesOrder so = load(soNumber);
-//        authorizeRead(so, currentUser); 이거 주석 처리(유저 지금안봄)
+        authorizeRead(so, currentUser); // 지점=본인창고만(이름축), HQ/ADMIN=전체.
         return toResult(so);
     }
 
@@ -292,22 +297,23 @@ public class SalesOrderService implements SalesOrderUseCase {
      */
     private void authorizeRead(SalesOrder so, CurrentUser user) {
         if (user.isHq()) return;   // 본사(ADMIN/HQ_*)는 전 창고 조회 — 창고 비스코핑
-        if (!so.ownedByWarehouse(user.warehouseName())) {
+        if (!so.ownedByWarehouseName(user.warehouseName())) {
             throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
         }
     }
 
+    /** 쓰기(수정/취소/수령): 본인 창고의 지점 사용자(또는 ADMIN), 역할은 @RequireRole 가 커버. */
     private void authorizeOwnerWrite(SalesOrder so, CurrentUser user) {
-//        if (user.isAdmin()) return;
-//        if (!(user.isBranchUser() && so.ownedByWarehouse(user.warehouseCode()))) {
-//            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
-//        }
+        if (user.isAdmin()) return;
+        if (!(user.isBranchUser() && so.ownedByWarehouseName(user.warehouseName()))) {
+            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
+        }
     }
 
     /** 제출(HQ로 올림)은 본인 창고의 지점 관리자(또는 ADMIN). 역할은 @RequireRole({BRANCH_MANAGER, ADMIN})가 커버. */
     private void authorizeSubmit(SalesOrder so, CurrentUser user) {
         if (user.isAdmin()) return;
-        if (!so.ownedByWarehouse(user.warehouseName())) {
+        if (!so.ownedByWarehouseName(user.warehouseName())) {
             throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
         }
     }

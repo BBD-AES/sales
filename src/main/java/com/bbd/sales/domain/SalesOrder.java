@@ -292,7 +292,7 @@ public class SalesOrder {
     }
 
     /** 본인 소속 창고인지 - 창고 '이름' 기준. 신원 스냅샷이 tenancyName(이름)만 주므로 이름축으로 비교. */
-    public boolean ownerByWarehouseName(String warehouseName) {
+    public boolean ownedByWarehouseName(String warehouseName) {
         return toWarehouseName.equals(warehouseName);
     }
 
