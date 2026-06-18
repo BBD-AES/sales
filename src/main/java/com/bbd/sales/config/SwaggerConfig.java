@@ -22,7 +22,7 @@ public class SwaggerConfig {
                         .version("v1.0"))
 
                 .addServersItem(new Server()
-                        .url("http://localhost:8082/sales")
+                        .url("http://localhost:8080/sales")
                         .description("local에서 직접 띄울 때"))
 
                 .addServersItem(new Server()
