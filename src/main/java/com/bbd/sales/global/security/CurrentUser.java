@@ -6,7 +6,7 @@ package com.bbd.sales.global.security;
 public record CurrentUser(
         String employeeNumber,
         RoleType role,
-        String warehouseCode
+        String warehouseName
 ) {
     public boolean isAdmin() {
         return role == RoleType.ADMIN;

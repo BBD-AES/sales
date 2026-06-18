@@ -62,6 +62,7 @@ public class SalesOrderService implements SalesOrderUseCase {
 
         SalesOrderSearchCriteria criteria = new SalesOrderSearchCriteria(
                 query.status(), query.priority(), fromScope,
+                null,
                 query.requestedBy(), from, to);
 
         SalesOrderPage page = repository.search(criteria, query.page(), query.size());
@@ -291,7 +292,7 @@ public class SalesOrderService implements SalesOrderUseCase {
      */
     private void authorizeRead(SalesOrder so, CurrentUser user) {
         if (user.isHq()) return;   // 본사(ADMIN/HQ_*)는 전 창고 조회 — 창고 비스코핑
-        if (!so.ownedByWarehouse(user.warehouseCode())) {
+        if (!so.ownedByWarehouse(user.warehouseName())) {
             throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
         }
     }
@@ -303,13 +304,10 @@ public class SalesOrderService implements SalesOrderUseCase {
 //        }
     }
 
-    /** 제출(HQ로 올림)은 본인 창고의 지점 관리자(또는 ADMIN). */
+    /** 제출(HQ로 올림)은 본인 창고의 지점 관리자(또는 ADMIN). 역할은 @RequireRole({BRANCH_MANAGER, ADMIN})가 커버. */
     private void authorizeSubmit(SalesOrder so, CurrentUser user) {
-//        if (user.isAdmin()) return;
-//        if (!user.isBranchManager()) {
-//            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_ROLE);
-//        }
-        if (!so.ownedByWarehouse(user.warehouseCode())) {
+        if (user.isAdmin()) return;
+        if (!so.ownedByWarehouse(user.warehouseName())) {
             throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
         }
     }

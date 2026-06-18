@@ -291,6 +291,11 @@ public class SalesOrder {
         return toWarehouseCode.equals(warehouseCode);
     }
 
+    /** 본인 소속 창고인지 - 창고 '이름' 기준. 신원 스냅샷이 tenancyName(이름)만 주므로 이름축으로 비교. */
+    public boolean ownerByWarehouseName(String warehouseName) {
+        return toWarehouseName.equals(warehouseName);
+    }
+
     // --- 조회용 getter (불변 노출) ---
     public String soNumber() { return soNumber; }
     public String toWarehouseCode() { return toWarehouseCode; }

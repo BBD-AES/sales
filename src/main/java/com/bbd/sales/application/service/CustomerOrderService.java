@@ -125,7 +125,7 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     // 조회 권한: HQ는 전체, 지점은 본인 것만
     private void authorizeRead(CustomerOrder co, CurrentUser u) { //
 //        if (u.isHq()) return;
-        if (!co.ownedByWarehouse(u.warehouseCode())) {
+        if (!co.ownedByWarehouse(u.warehouseName())) {
             throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
         }
     }

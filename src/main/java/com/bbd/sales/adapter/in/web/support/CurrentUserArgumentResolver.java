@@ -42,10 +42,10 @@ public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolve
                                   WebDataBinderFactory binderFactory) {
         CurrentUserSnapshotResult snapshot = getCurrentUserSnapshot.getCurrentUserSnapshot();
         RoleType role = RoleType.valueOf(snapshot.role().name()); // UserRole ↔ RoleType 상수명 동일
-        // 지점: 소속 창고 = tenancyName (소유권 검증 기준). 본사: 단일 창고 없음 → null(authorizeRead 가 isHq 로 통과).
-        String warehouseCode = snapshot.tenancyType() == TenancyType.BRANCH
+        // 지점: 소속 창고 '이름' = tenancyName (소유권 검증 기준). 본사: 단일 창고 없음 → null(authorizeRead 가 isHq 로 통과).
+        String warehouseName = snapshot.tenancyType() == TenancyType.BRANCH
                 ? snapshot.tenancyName()
                 : null;
-        return new CurrentUser(snapshot.employeeNumber(), role, warehouseCode);
+        return new CurrentUser(snapshot.employeeNumber(), role, warehouseName);
     }
 }
