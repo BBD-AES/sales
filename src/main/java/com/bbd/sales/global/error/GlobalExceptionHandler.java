@@ -3,11 +3,12 @@ package com.bbd.sales.global.error;
 import com.bbd.sales.domain.CustomerOrderStateException;
 import com.bbd.sales.domain.SalesOrderStateException;
 import com.bbd.sales.global.error.dto.ErrorCode;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ProblemDetail;
-import org.springframework.http.ResponseEntity;
+import org.jspecify.annotations.Nullable;
+import org.springframework.http.*;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
@@ -59,5 +60,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         body.setTitle("BAD_REQUEST");
         body.setDetail(e.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
+                                                                            HttpHeaders headers,
+                                                                            HttpStatusCode status,
+                                                                            WebRequest request) {
+        ProblemDetail body = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
+        body.setTitle("BAD_REQUEST");
+        body.setDetail("요청 본문 형식 오류(수량은 1 이상 정수여야 합니다.)");
+        return ResponseEntity.badRequest().body(body);
     }
 }
