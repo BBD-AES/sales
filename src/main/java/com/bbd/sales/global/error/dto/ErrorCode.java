@@ -33,7 +33,8 @@ public enum ErrorCode {
     CUSTOMER_ORDER_NOT_CANCELABLE(HttpStatus.CONFLICT, "CO005", "OPEN 또는 CONFIRMED 상태에서만 취소할 수 있습니다."),
     CUSTOMER_ORDER_NOT_CLOSABLE(HttpStatus.CONFLICT, "CO006", "CONFIRMED 상태의 수주만 종료할 수 있습니다."),
 
-    ITEM_NOT_ORDERABLE(HttpStatus.BAD_REQUEST, "ITEM001", "주문할 수 없는 상품(SKU)이 포함되어 있습니다.")
+    ITEM_NOT_ORDERABLE(HttpStatus.BAD_REQUEST, "ITEM001", "주문할 수 없는 상품(SKU)이 포함되어 있습니다."),
+    ITEM_NOT_FOUND(HttpStatus.BAD_REQUEST, "ITEM002", "존재하지 않는 상품(SKU)입니다."),
     ;
 
     private final HttpStatus status;
