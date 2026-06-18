@@ -2,6 +2,7 @@ package com.bbd.sales.adapter.out.item;
 
 import com.bbd.sales.application.port.out.ItemPort;
 import com.bbd.sales.application.port.out.ProductSnapshot;
+import com.bbd.securitycore.adapter.in.annotation.RequireRole;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;

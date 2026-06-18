@@ -5,12 +5,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.service.annotation.GetExchange;
 import org.springframework.web.service.annotation.HttpExchange;
 
-/**
- * item 상품 마스터 HTTP 인터페이스(구현은 프록시 생성).
- */
-@HttpExchange
-public interface ItemApiClient {
+@HttpExchange("/api/v1/items")
+public interface ItemHttpService {
 
-    @GetExchange("/api/v1/items/{sku}")
-    ItemApiResponse getBySku(@PathVariable("sku") String sku);
+    @GetExchange("/{sku}")
+    ItemApiResponse getItem(@PathVariable String sku);
+
 }

@@ -22,11 +22,11 @@ import java.math.BigDecimal;
 @RequiredArgsConstructor
 public class ItemRestAdapter implements ItemPort {
 
-    private final ItemApiClient client;
+    private final ItemHttpService client;
 
     @Override
     public ProductSnapshot resolveProduct(String sku) {
-        ItemApiResponse r = client.getBySku(sku); // 404/연결실패 시 예외 전파(폴백 안 함)
+        ItemApiResponse r = client.getItem(sku); // 404/연결실패 시 예외 전파(폴백 안 함)
         return new ProductSnapshot(
                 r.sku(),
                 r.name(),

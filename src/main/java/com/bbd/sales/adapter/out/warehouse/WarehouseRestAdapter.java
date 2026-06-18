@@ -19,8 +19,8 @@ import org.springframework.web.client.RestClientException;
 @Slf4j
 public class WarehouseRestAdapter implements WarehousePort {
 
-    // 구현체는 HttpServiceProxyFactory가 런타임에 생성해서 주입
-    private final InventoryWarehouseClient client;
+    private final InventoryHttpService client;
+
     @Override
     public String warehouseName(String warehouseCode) {
         if (warehouseCode == null) return null;
