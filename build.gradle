@@ -55,5 +55,13 @@ dependencies {
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+	useJUnitPlatform {
+		// 태그 필터: ./gradlew test -PexcludeTags=integration (단위만) / -PincludeTags=integration (통합만)
+		if (project.hasProperty('excludeTags')) {
+			excludeTags((project.property('excludeTags') as String).split(',') as String[])
+		}
+		if (project.hasProperty('includeTags')) {
+			includeTags((project.property('includeTags') as String).split(',') as String[])
+		}
+	}
 }
