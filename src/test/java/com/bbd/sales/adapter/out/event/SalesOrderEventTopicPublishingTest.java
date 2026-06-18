@@ -61,7 +61,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>스프링 컨텍스트를 안 띄우므로 current user 리졸버·웹 계층·RDS와 무관하다.
  *
  * <p>실행(브로커 도달 가능한 환경): {@code ./gradlew test --tests '*SalesOrderEventTopicPublishingTest'}
- * <br>브로커 주소 변경: 환경변수 {@code KAFKA_BOOTSTRAP_SERVERS}. CI 등에서 제외: {@code --exclude-tag integration}.
+ * <br>브로커 주소 변경: 환경변수 {@code KAFKA_BOOTSTRAP_SERVERS}. CI 등에서 제외: {@code -PexcludeTags=integration}.
  */
 @Tag("integration")
 class SalesOrderEventTopicPublishingTest {

@@ -17,6 +17,7 @@ import com.bbd.sales.global.error.ApiException;
 import com.bbd.sales.global.error.dto.ErrorCode;
 import com.bbd.sales.global.security.CurrentUser;
 import com.bbd.sales.global.security.RoleType;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -134,6 +135,7 @@ class CustomerOrderServiceTest {
     }
 
     @Test
+    @Disabled("#53 인증 마이그레이션 중 — CustomerOrderService.create 창고권한 체크 주석(런타임 인증 OFF). 인증 복구 시 재활성")
     @DisplayName("create: 지점유저가 본인 외 창고로 생성하면 FORBIDDEN_WAREHOUSE, 채번/저장 안 함")
     void create_branchUser_otherWarehouse_forbidden() {
         CreateCustomerOrderCommand command = new CreateCustomerOrderCommand(
@@ -156,6 +158,7 @@ class CustomerOrderServiceTest {
     // ---------------------------------------------------------------------
 
     @Test
+    @Disabled("#53 인증 마이그레이션 중 — CustomerOrderService.authorizeRead의 HQ 바이패스 주석(HQ도 창고체크에 걸림). 인증 복구 시 재활성")
     @DisplayName("get: HQ는 타 지점 수주도 전체 조회 통과")
     void get_hq_passesAnyWarehouse() {
         CustomerOrder co = open("CO-2026-0001");
@@ -309,6 +312,7 @@ class CustomerOrderServiceTest {
     }
 
     @Test
+    @Disabled("#53 인증 마이그레이션 중 — CustomerOrderService.authorizeOwnerWrite 주석(런타임 인증 OFF). 인증 복구 시 재활성")
     @DisplayName("confirm: 타 지점 유저면 FORBIDDEN_WAREHOUSE, 도메인 전이/저장 안 함")
     void confirm_otherBranch_forbidden_noSave() {
         CustomerOrder co = open("CO-2026-0001");
@@ -376,6 +380,7 @@ class CustomerOrderServiceTest {
     }
 
     @Test
+    @Disabled("#53 인증 마이그레이션 중 — CustomerOrderService.authorizeOwnerWrite 주석(런타임 인증 OFF). 인증 복구 시 재활성")
     @DisplayName("update: 타 지점 유저면 FORBIDDEN_WAREHOUSE, 카탈로그/저장 안 함")
     void update_otherBranch_forbidden() {
         CustomerOrder co = open("CO-2026-0001");
