@@ -67,17 +67,17 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     @Override
     public CustomerOrderResult create(CreateCustomerOrderCommand command) {
         CurrentUser user = currentUserProvider.current();
-//        if (!user.isAdmin() && !(user.isBranchUser() && command.dealerWarehouseCode().equals(user.warehouseCode()))) { // 지점유저(본인 지점)만 생성, admin 예외
-//            throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
-//        }
+        String dealerName = warehousePort.warehouseName(command.dealerWarehouseCode()); // 딜러명 스냅샷
+        // 본인 지점 앞으로만 생성(이름축). ADMIN 예외. 미인가는 라인 해석/채번 전 조기 차단.
+        if (!user.isAdmin() && !(user.isBranchUser() && dealerName.equals(user.warehouseName()))) {
+            throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
+        }
         List<CustomerOrderLine> lines = toDomainLines(command.lines()); // sku -> 스냅샷 채워 도메인 라인 생성
         String coNumber = repository.nextCoNumber(); // 채번 (CO-2026-xxxx)
-        String dealerName = warehousePort.warehouseName(command.dealerWarehouseCode()); // 딜러명 스냅샷
         CustomerOrder co = CustomerOrder.receive(coNumber, command.dealerWarehouseCode(), dealerName, // 생성 규칙은 도메인 생성 메서드에서 검증
                 command.customerName(), command.customerContact(), command.note(),
                 lines, user.employeeNumber(), LocalDateTime.now());
         return toResult(repository.save(co)); // 저장 후 Result
-        
     }
 
     @Override
@@ -127,19 +127,19 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     }
 
     // 조회 권한: HQ는 전체, 지점은 본인 것만
-    private void authorizeRead(CustomerOrder co, CurrentUser u) { //
-//        if (u.isHq()) return;
-        if (!co.ownedByWarehouse(u.warehouseName())) {
+    private void authorizeRead(CustomerOrder co, CurrentUser u) {
+        if (u.isHq()) return; // 본사(ADMIN/HQ_*)는 전 지점 조회
+        if (!co.ownedByWarehouseName(u.warehouseName())) {
             throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
         }
     }
 
     // 쓰기 권한: admin 또는 (지점유저 && 본인소유)
     private void authorizeOwnerWrite(CustomerOrder co, CurrentUser u) {
-//        if (u.isAdmin()) return;
-//        if (!(u.isBranchUser() && co.ownedByWarehouse(u.warehouseCode()))) {
-//            throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
-//        }
+        if (u.isAdmin()) return;
+        if (!(u.isBranchUser() && co.ownedByWarehouseName(u.warehouseName()))) {
+            throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
+        }
     }
 
     // sku -> 상품 스냅샷 채워 라인 생성
