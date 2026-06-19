@@ -228,13 +228,12 @@ public class SalesOrderService implements SalesOrderUseCase {
         so.receive(currentUser.employeeNumber(), LocalDateTime.now()); // APPROVED 검증은 도메인이
         repository.save(so);
 
-        // inventory가 listen할 예정
-        eventPublisher.publishReceived(so.soNumber());
-//        // 실재고 이동(예약분 출고). 동기: Inventory 호출 실패 시 이 트랜잭션 롤백 → 수령도 취소(정합성 결속).
-//        // (인벤토리는 동기 issue REST를 구현 — 이벤트 소비자 없음. 어댑터 실연동 전엔 스텁 no-op.)
-//        inventoryPort.transferForSalesOrderReceive(
-//                so.soNumber(), so.toWarehouseCode(),
-//                currentUser.employeeNumber(), toTransferLines(so));
+        // 실재고 이동(예약분 출고)=동기 issue. Inventory 호출 실패 시 이 트랜잭션 롤백 → 수령도 취소(정합성 결속).
+        // 핸드오프 계약: inventory는 동기 POST /stocks/reservations/issue 로 처리(sales.order.received 구독자 없음).
+        // 실 REST 어댑터 연동 전까지는 스텁(no-op). inventory 엔드포인트 준비되면 InventoryRestAdapter 로 교체.
+        inventoryPort.transferForSalesOrderReceive(
+                so.soNumber(), so.toWarehouseCode(),
+                currentUser.employeeNumber(), toTransferLines(so));
 
         return statusChange(so, currentUser.employeeNumber(), so.receivedAt(), null);
     }

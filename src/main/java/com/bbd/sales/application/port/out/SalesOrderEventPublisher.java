@@ -6,5 +6,4 @@ package com.bbd.sales.application.port.out;
  */
 public interface SalesOrderEventPublisher {
     void publishSubmitted(String soNumber);
-    void publishReceived(String soNumber);
 }

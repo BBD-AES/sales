@@ -26,11 +26,6 @@ public class OutboxSalesOrderEventPublisher implements SalesOrderEventPublisher 
         enqueue("submitted", soNumber);
     }
 
-    @Override
-    public void publishReceived(String soNumber) {
-        enqueue("received", soNumber);
-    }
-
     private void enqueue(String eventType, String soNumber) {
         String eventId = UUID.randomUUID().toString();
         var msg = new SalesOrderEventMessage(eventId, eventType, soNumber, Instant.now().toString());
