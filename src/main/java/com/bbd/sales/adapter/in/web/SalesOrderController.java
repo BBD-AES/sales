@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * 인바운드(구동) 어댑터 = REST 진입점.
@@ -67,6 +68,23 @@ public class SalesOrderController {
     @GetMapping("/{soNumber}")
     public SalesOrderDetailResponse get(@PathVariable String soNumber) {
         return webMapper.toDetailResponse(salesOrderUseCase.get(soNumber));
+    }
+
+    // [수동 예약] 가용 조회 — HQ가 창고를 고르려고 현황을 본다.
+    @RequireRole({UserRole.HQ_MANAGER, UserRole.ADMIN})
+    @GetMapping("/{soNumber}/stock-availability")
+    public List<WarehouseStockResponse> stockAvailability(@PathVariable String soNumber,
+                                                          @RequestParam String sku) {
+        return webMapper.toStockResponses(salesOrderUseCase.stockAvailability(soNumber, sku));
+    }
+
+    // [수동 예약] 사람이 고른 한 창고에서 라인 예약(여러 번). requestId=프론트 클릭당 멱등키(UUID).
+    @RequireRole({UserRole.HQ_MANAGER, UserRole.ADMIN})
+    @PostMapping("/{soNumber}/reservations")
+    public SalesOrderDetailResponse reserveLine(@PathVariable String soNumber,
+                                                @Valid @RequestBody ReserveLineRequest request) {
+        return webMapper.toDetailResponse(
+                salesOrderUseCase.reserveLine(webMapper.toReserveLineCommand(soNumber, request)));
     }
 
     // 수정: 지점 사용자(+ADMIN), REQUESTED 에서만(상태검증은 도메인)

@@ -4,7 +4,9 @@ import com.bbd.sales.adapter.in.web.dto.*;
 import com.bbd.sales.application.command.CreateSalesOrderCommand;
 import com.bbd.sales.application.command.SalesOrderLineCommand;
 import com.bbd.sales.application.command.SearchSalesOrderQuery;
+import com.bbd.sales.application.command.ReserveLineCommand;
 import com.bbd.sales.application.command.UpdateSalesOrderCommand;
+import com.bbd.sales.application.port.out.WarehouseStock;
 import com.bbd.sales.application.result.*;
 import com.bbd.sales.domain.SalesOrderPriority;
 import com.bbd.sales.domain.SalesOrderStatus;
@@ -48,6 +50,16 @@ public class SalesOrderWebMapper {
                 req.priority(),
                 req.note(),
                 req.lines() != null ? toLineCommands(req.lines()) : null);
+    }
+
+    public ReserveLineCommand toReserveLineCommand(String soNumber, ReserveLineRequest req) {
+        return new ReserveLineCommand(soNumber, req.sku(), req.warehouseCode(), req.quantity(), req.requestId());
+    }
+
+    public List<WarehouseStockResponse> toStockResponses(List<WarehouseStock> stocks) {
+        return stocks.stream()
+                .map(s -> new WarehouseStockResponse(s.warehouseCode(), s.warehouseName(), s.available()))
+                .toList();
     }
 
     private List<SalesOrderLineCommand> toLineCommands(List<SalesOrderLineRequest> lines) {
