@@ -154,10 +154,11 @@ public class SalesOrderService implements SalesOrderUseCase {
     public SalesOrderStatusChangeResult withdraw(String soNumber) {
         CurrentUser currentUser = currentUserProvider.current();
         SalesOrder so = load(soNumber);
-        authorizeOwnerWrite(so, currentUser); // 본인 지점 소유(취소와 동일 가드). 외부 호출 0(예약 전 상태).
+        authorizeOwnerWrite(so, currentUser); // 본인 지점 소유(취소와 동일 가드)
         LocalDateTime now = LocalDateTime.now();
         so.withdraw(now);
         repository.save(so);
+        inventoryPort.release(so.soNumber()); // SUBMITTED 에서 HQ가 잡아둔 예약 반납(신모델=SUBMITTED에서 예약). 멱등.
         return statusChange(so, currentUser.employeeNumber(), now, null);
     }
 

@@ -39,9 +39,9 @@ public enum SalesOrderStatus {
         return this == SUBMITTED;
     }
 
-    /** 요청자 취소가 가능한 상태인가 (HQ 손에 넘어가기 전까지). */
+    /** 요청자 취소가 가능한 상태인가. REQUESTED 까지만(제출 후 SUBMITTED 는 withdraw 로 되돌린 뒤 취소 — 예약 보호). */
     public boolean isCancelable() {
-        return this == REQUESTED || this == SUBMITTED;
+        return this == REQUESTED; // SUBMITTED 부터는 HQ 손. HQ 측 종료는 reject.
     }
 
     /** HQ 승인/반려 결정이 가능한 상태인가. */

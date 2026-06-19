@@ -80,6 +80,14 @@ class SalesOrderServiceTest {
         return so;
     }
 
+    /** REQUESTED 상태 단일 라인(취소 등 REQUESTED 전용 테스트용). */
+    private SalesOrder requestedOrder(String sku, int qty) {
+        return SalesOrder.request("SO-1", "WH-BR-001", "강남 1지점",
+                SalesOrderPriority.NORMAL, null,
+                List.of(new SalesOrderLine(1, sku, "상품", new BigDecimal("1000"), qty)),
+                "BR003", NOW);
+    }
+
     @Test
     @DisplayName("approve: 사전 전량 예약된 상태 확정 -> IN_FULFILLMENT, 구매요청 없음")
     void approve_allReserved_inFulfillment() {
@@ -315,7 +323,7 @@ class SalesOrderServiceTest {
     @Test
     @DisplayName("cancel: 본인 창고 지점 사용자 OK")
     void cancel_ownBranch_ok() {
-        SalesOrder so = submitted("OIL-FLT-001", 10);
+        SalesOrder so = requestedOrder("OIL-FLT-001", 10); // 취소는 REQUESTED 에서만
         when(currentUserProvider.current()).thenReturn(STAFF);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
@@ -327,7 +335,7 @@ class SalesOrderServiceTest {
     @Test
     @DisplayName("cancel: ADMIN은 소유권 무관 OK")
     void cancel_admin_bypassesOwnership() {
-        SalesOrder so = submitted("OIL-FLT-001", 10);
+        SalesOrder so = requestedOrder("OIL-FLT-001", 10); // 취소는 REQUESTED 에서만
         when(currentUserProvider.current()).thenReturn(ADMIN);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 

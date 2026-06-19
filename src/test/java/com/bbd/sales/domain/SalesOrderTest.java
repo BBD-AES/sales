@@ -117,15 +117,18 @@ class SalesOrderTest {
     }
 
     @Test
-    @DisplayName("REQUESTED/SUBMITTED 에서는 취소 가능")
-    void cancel_allowedUntilSubmitted() {
+    @DisplayName("REQUESTED 에서만 취소 가능")
+    void cancel_onlyFromRequested() {
         SalesOrder a = requested();
         a.cancel("EMP-staff", NOW);
         assertThat(a.status()).isEqualTo(SalesOrderStatus.CANCELED);
+    }
 
-        SalesOrder b = submitted();
-        b.cancel("EMP-mgr", NOW);
-        assertThat(b.status()).isEqualTo(SalesOrderStatus.CANCELED);
+    @Test
+    @DisplayName("SUBMITTED 부터는 취소 불가(NOT_CANCELABLE) — withdraw 로 되돌린 뒤 취소")
+    void cancel_fromSubmitted_fails() {
+        SalesOrder so = submitted();
+        assertViolation(() -> so.cancel("EMP-mgr", NOW), Violation.NOT_CANCELABLE);
     }
 
     @Test

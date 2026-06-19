@@ -10,6 +10,8 @@ import org.springframework.web.service.annotation.GetExchange;
 import org.springframework.web.service.annotation.HttpExchange;
 import org.springframework.web.service.annotation.PostExchange;
 
+import java.util.List;
+
 /**
  * inventory 재고 예약/출고 클라이언트(동기 REST, JWT 릴레이 자동 - @ImportHttpServices 그룹).
  * base-url = bbd-inventory-service(...:8083/inventory). 경로는 context-path/inventory 뒤.
@@ -17,9 +19,9 @@ import org.springframework.web.service.annotation.PostExchange;
 @HttpExchange("/api/v1/stocks")
 public interface InventoryStockHttpService {
 
-    // 가용 조회(창고 후보). 단일 SKU
+    // 가용 조회(창고 후보). inventory 는 멀티 sku(List) → List 응답. 단건은 sku 1개짜리 리스트로 호출.
     @GetExchange("/availability")
-    StockAvailabilityResponse availability(@RequestParam("sku") String sku);
+    List<StockAvailabilityResponse> availability(@RequestParam("sku") List<String> sku);
 
     // 원자적 단일창고 예약 - 실제 잡힌 양 반환.
     @PostExchange("/reservations")

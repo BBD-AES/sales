@@ -1,7 +1,7 @@
 package com.bbd.sales.adapter.out.inventory.dto;
 
 public record ReserveResponse(
-        String reservationId,
+        Long reservationId,   // inventory 는 Long (sales 는 사용 안 함 — 잡힌 양만 씀)
         String soNumber,
         String sku,
         String warehouseCode,

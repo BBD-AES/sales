@@ -33,8 +33,12 @@ public class InventoryRestAdapter implements InventoryPort {
      */
     @Override
     public List<WarehouseStock> availability(String sku) {
-        StockAvailabilityResponse res = client.availability(sku);          // inventory 에 현황 물어봄
-        return res.warehouses().stream()                                   // 응답(창고 배열)을
+        // inventory 가용조회는 멀티 sku → List 응답. 단건이므로 sku 1개로 호출하고 첫 원소만 사용.
+        List<StockAvailabilityResponse> res = client.availability(List.of(sku));
+        if (res.isEmpty()) {
+            return List.of(); // 해당 sku 재고 행 없음
+        }
+        return res.get(0).warehouses().stream()                            // 응답(창고 배열)을
                 .map(w -> new WarehouseStock(                              // 도메인이 쓰는 형태로 변환
                         w.warehouseCode(), w.warehouseName(), w.available()))
                 .toList();
