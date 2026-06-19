@@ -6,4 +6,7 @@ package com.bbd.sales.application.port.out;
  */
 public interface SalesOrderEventPublisher {
     void publishSubmitted(String soNumber);
+
+    /** 수령 확정(receive) → 토픽 sales.order.received. inventory가 구독해 해당 soNumber의 예약분을 출고(issue). */
+    void publishReceived(String soNumber);
 }

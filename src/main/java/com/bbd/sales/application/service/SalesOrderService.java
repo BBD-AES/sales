@@ -244,12 +244,10 @@ public class SalesOrderService implements SalesOrderUseCase {
         so.receive(currentUser.employeeNumber(), LocalDateTime.now()); // APPROVED 검증은 도메인이
         repository.save(so);
 
-        // 실재고 이동(예약분 출고)=동기 issue. Inventory 호출 실패 시 이 트랜잭션 롤백 → 수령도 취소(정합성 결속).
-        // 핸드오프 계약: inventory는 동기 POST /stocks/reservations/issue 로 처리(sales.order.received 구독자 없음).
-        // 실 REST 어댑터 연동 전까지는 스텁(no-op). inventory 엔드포인트 준비되면 InventoryRestAdapter 로 교체.
-        inventoryPort.transferForSalesOrderReceive(
-                so.soNumber(), so.toWarehouseCode(),
-                currentUser.employeeNumber(), toTransferLines(so));
+        // 출고(예약분 차감)는 이벤트로: sales.order.received 발행 → inventory가 구독해 해당 soNumber의 예약분을 issue.
+        // 트랜잭셔널 아웃박스(SO 저장과 같은 커밋). 예약은 approve 때 이미 동기 확정돼 오버셀 위험 없음 → 출고는 비동기 안전.
+        // (동기 issue REST 경로 inventoryPort.transferForSalesOrderReceive 도 존재하나, 표준 receive는 이벤트만 사용 — 이중차감 방지.)
+        eventPublisher.publishReceived(so.soNumber());
 
         return statusChange(so, currentUser.employeeNumber(), so.receivedAt(), null);
     }
@@ -261,20 +259,13 @@ public class SalesOrderService implements SalesOrderUseCase {
                 .orElseThrow(() -> new ApiException(ErrorCode.SALES_ORDER_NOT_FOUND));
     }
 
-    /** 도메인 라인 -> Inventory 포트 전송 라인(sku/수량). */
-    private List<StockTransferLine> toTransferLines(SalesOrder so) {
-        return so.lines().stream()
-                .map(l -> new StockTransferLine(l.sku(), l.quantity()))
-                .toList();
-    }
-
     /*
      * 권한 매트릭스 (의도된 설계 — 규칙 변경 시 이 표도 함께 갱신):
      *   생성        : 본인창고 지점 사용자, ADMIN
      *   조회        : HQ(전체), 지점(본인창고만), ADMIN
      *   수정        : 본인창고 지점 사용자, ADMIN   (REQUESTED 에서만)
      *   제출(->HQ)  : 본인창고 BRANCH_MANAGER, ADMIN  (REQUESTED -> SUBMITTED)
-     *   취소        : 본인창고 지점 사용자, ADMIN   (REQUESTED/SUBMITTED 까지)
+     *   취소        : 본인창고 지점 사용자, ADMIN   (REQUESTED 에서만; 제출 후는 withdraw 로 되돌린 뒤)
      *   승인/반려   : HQ_MANAGER, ADMIN            (SUBMITTED 에서)
      *   수령(도착)  : 본인창고 지점 사용자, ADMIN   (IN_FULFILLMENT 에서)
      *

@@ -208,8 +208,8 @@ class SalesOrderServiceTest {
     }
 
     @Test
-    @DisplayName("receive: IN_FULFILLMENT -> RECEIVED, 동기 출고(issue) 호출")
-    void receive_inFulfillment_issues() {
+    @DisplayName("receive: IN_FULFILLMENT -> RECEIVED, sales.order.received 발행")
+    void receive_inFulfillment_publishesReceived() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
         so.reserveLine("OIL-FLT-001", 10, "WH-HQ-001"); // 전량 예약
         so.confirmByHq("HQ001", NOW);                   // -> IN_FULFILLMENT
@@ -219,19 +219,19 @@ class SalesOrderServiceTest {
         service.receive("SO-1");
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.RECEIVED);
-        verify(inventoryPort).transferForSalesOrderReceive(eq("SO-1"), eq("WH-BR-001"), eq("BR003"), anyList());
+        verify(eventPublisher).publishReceived("SO-1");
     }
 
     @Test
-    @DisplayName("receive: 동기 출고 실패 시 예외 전파(정합성 결속)")
-    void receive_inventoryFails_propagates() {
+    @DisplayName("receive: 이벤트 발행 실패 시 예외 전파(트랜잭션 롤백 → 수령 취소)")
+    void receive_publishFails_propagates() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
         so.reserveLine("OIL-FLT-001", 10, "WH-HQ-001");
         so.confirmByHq("HQ001", NOW);
         when(currentUserProvider.current()).thenReturn(STAFF);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
-        doThrow(new RuntimeException("inventory down"))
-                .when(inventoryPort).transferForSalesOrderReceive(any(), any(), any(), anyList());
+        doThrow(new RuntimeException("outbox down"))
+                .when(eventPublisher).publishReceived("SO-1");
 
         assertThatThrownBy(() -> service.receive("SO-1"))
                 .isInstanceOf(RuntimeException.class);
@@ -359,15 +359,15 @@ class SalesOrderServiceTest {
     }
 
     @Test
-    @DisplayName("receive: 타지점 사용자 -> FORBIDDEN, 재고이동 호출 안 함")
-    void receive_otherBranch_forbidden_noTransfer() {
+    @DisplayName("receive: 타지점 사용자 -> FORBIDDEN, 발행 안 함")
+    void receive_otherBranch_forbidden_noPublish() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
         when(currentUserProvider.current()).thenReturn(OTHER_BRANCH);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
         assertThatThrownBy(() -> service.receive("SO-1"))
                 .isInstanceOf(ApiException.class);
-        verify(inventoryPort, never()).transferForSalesOrderReceive(any(), any(), any(), anyList());
+        verify(eventPublisher, never()).publishReceived(any());
     }
 
     // ===== 생성 소유권 (Step 3) =====
