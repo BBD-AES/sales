@@ -94,6 +94,11 @@ public class SalesOrderService implements SalesOrderUseCase {
 
         // 창고명 스냅샷: 생성 시점에 한 번 조회(이후 읽기는 원격 호출 0). 출발지(source)는 sales가 저장 안 함.
         String toName = warehousePort.warehouseName(command.toWarehouseCode());
+        // 창고명 미해결(코드 폴백=조회 실패)이면 fail-fast: 코드를 이름으로 박제하면 이후 이름축 소유권검사가 영영 깨지고,
+        // 이름 기반 인가도 잘못 거부된다(인벤토리 다운 시 전 생성 차단). 코드-as-이름 저장 방지.
+        if (toName == null || toName.equals(command.toWarehouseCode())) {
+            throw new ApiException(ErrorCode.WAREHOUSE_NAME_UNAVAILABLE, command.toWarehouseCode());
+        }
 
         // 본인 창고 앞으로만 생성(이름축). ADMIN 예외. 역할(BRANCH_*/ADMIN)은 @RequireRole이 커버.
         // 가드를 라인 해석/번호 채번 전에 둬 미인가 요청은 item 호출/SO 번호 소모 없이 조기 차단.
@@ -223,7 +228,11 @@ public class SalesOrderService implements SalesOrderUseCase {
         so.receive(currentUser.employeeNumber(), LocalDateTime.now()); // APPROVED 검증은 도메인이
         repository.save(so);
 
-        eventPublisher.publishReceived(so.soNumber());
+        // 실재고 이동(예약분 출고). 동기: Inventory 호출 실패 시 이 트랜잭션 롤백 → 수령도 취소(정합성 결속).
+        // (인벤토리는 동기 issue REST를 구현 — 이벤트 소비자 없음. 어댑터 실연동 전엔 스텁 no-op.)
+        inventoryPort.transferForSalesOrderReceive(
+                so.soNumber(), so.toWarehouseCode(),
+                currentUser.employeeNumber(), toTransferLines(so));
 
         return statusChange(so, currentUser.employeeNumber(), so.receivedAt(), null);
     }
@@ -324,9 +333,10 @@ public class SalesOrderService implements SalesOrderUseCase {
     }
 
     private void authorizeDecision(CurrentUser user) {
-//        if (!user.canDecide()) {
-//            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_ROLE);
-//        }
+        // 방어적 인가(서비스 경계): @RequireRole(컨트롤러)가 1차 게이트지만, 비-웹 진입점 대비 서비스도 자체 강제.
+        if (!user.canDecide()) {
+            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_ROLE);
+        }
     }
 
     private List<SalesOrderLine> toDomainLines(List<SalesOrderLineCommand> lineCommands) {

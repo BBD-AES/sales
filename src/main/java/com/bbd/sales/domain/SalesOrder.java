@@ -303,7 +303,7 @@ public class SalesOrder {
 
     /** 본인 소속 창고인지 - 창고 '이름' 기준. 신원 스냅샷이 tenancyName(이름)만 주므로 이름축으로 비교. */
     public boolean ownedByWarehouseName(String warehouseName) {
-        return toWarehouseName.equals(warehouseName);
+        return toWarehouseName != null && toWarehouseName.equals(warehouseName); // fail-closed(스냅샷 null이면 소유 아님)
     }
 
     // --- 조회용 getter (불변 노출) ---

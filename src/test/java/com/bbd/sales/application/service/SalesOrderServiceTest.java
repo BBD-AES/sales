@@ -129,10 +129,10 @@ class SalesOrderServiceTest {
     }
 
     @Test
-    @Disabled("#53 인증 마이그레이션 중 — SalesOrderService.authorizeDecision 주석(런타임 인증 OFF). 인증 복구 시 재활성")
     @DisplayName("approve: HQ 권한 아니면 거부, 재고 예약 호출 안 함")
     void approve_nonHqRole_forbidden() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
+        when(currentUserProvider.current()).thenReturn(STAFF);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
         assertThatThrownBy(() -> service.approve("SO-1"))

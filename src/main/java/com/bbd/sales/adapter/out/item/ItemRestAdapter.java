@@ -37,10 +37,10 @@ public class ItemRestAdapter implements ItemPort {
                     BigDecimal.valueOf(r.unitPrice()), // item int(원) -> sales BigDecimal
                     r.active()
             );
-        } catch (HttpClientErrorException e) {
-            // item 404 = 존재하지 않는 SKU(클라 입력 오류) -> 4xx 로 번역. 서버 결함(500)으로 뜨지 안도록.
+        } catch (HttpClientErrorException.NotFound e) {
+            // item 404 = 존재하지 않는 SKU(클라 입력 오류) -> 4xx 로 번역. 서버 결함(500)으로 뜨지 않도록.
             throw new ApiException(ErrorCode.ITEM_NOT_FOUND, "존재하지 않는 SKU: " + sku);
         }
-        // 그 외 연결실패/5xx 등은 그대로 전파. 주문 생성 실패(빠른 실패)로 이어지도록.
+        // 404 외 4xx(401/403 등)·5xx·연결실패는 그대로 전파(ITEM_NOT_FOUND로 오표기 금지). 주문 생성 실패(빠른 실패).
     }
 }

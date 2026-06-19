@@ -68,6 +68,10 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     public CustomerOrderResult create(CreateCustomerOrderCommand command) {
         CurrentUser user = currentUserProvider.current();
         String dealerName = warehousePort.warehouseName(command.dealerWarehouseCode()); // 딜러명 스냅샷
+        // 딜러명 미해결(코드 폴백=조회 실패)이면 fail-fast: 코드-as-이름 박제 방지 + 이름축 인가 오작동 방지.
+        if (dealerName == null || dealerName.equals(command.dealerWarehouseCode())) {
+            throw new ApiException(ErrorCode.WAREHOUSE_NAME_UNAVAILABLE, command.dealerWarehouseCode());
+        }
         // 본인 지점 앞으로만 생성(이름축). ADMIN 예외. 미인가는 라인 해석/채번 전 조기 차단.
         if (!user.isAdmin() && !(user.isBranchUser() && dealerName.equals(user.warehouseName()))) {
             throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);

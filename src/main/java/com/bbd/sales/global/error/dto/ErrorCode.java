@@ -35,6 +35,7 @@ public enum ErrorCode {
 
     ITEM_NOT_ORDERABLE(HttpStatus.BAD_REQUEST, "ITEM001", "주문할 수 없는 상품(SKU)이 포함되어 있습니다."),
     ITEM_NOT_FOUND(HttpStatus.BAD_REQUEST, "ITEM002", "존재하지 않는 상품(SKU)입니다."),
+    WAREHOUSE_NAME_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "WH001", "창고 정보를 조회할 수 없습니다. 잠시 후 다시 시도해 주세요."),
     ;
 
     private final HttpStatus status;
