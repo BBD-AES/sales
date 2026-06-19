@@ -29,6 +29,7 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     private final CustomerOrderRepository repository; // 구현(JPA어댑터)은 모르는 채로,out 포트(인터페이스)에만 의존
     private final ItemPort itemPort;
     private final WarehousePort warehousePort;
+    private final CurrentUserProvider currentUserProvider; // 신원은 JWT에서 서버측 취득(컨트롤러 파라미터 아님)
 
     @Override
     @Transactional(readOnly = true)
@@ -56,40 +57,45 @@ public class CustomerOrderService implements CustomerOrderUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public CustomerOrderResult get(String coNumber, CurrentUser currentUser) {
+    public CustomerOrderResult get(String coNumber) {
         CustomerOrder co = load(coNumber); // 없으면 404
-        authorizeRead(co, currentUser); // HQ는 전체, 그 외는 지점 본인 것만
+        authorizeRead(co, currentUserProvider.current()); // HQ는 전체, 그 외는 지점 본인 것만
         return toResult(co); // 도메인 -> 상세 result
     }
 
 
     @Override
     public CustomerOrderResult create(CreateCustomerOrderCommand command) {
-        CurrentUser user = command.currentUser();
-//        if (!user.isAdmin() && !(user.isBranchUser() && command.dealerWarehouseCode().equals(user.warehouseCode()))) { // 지점유저(본인 지점)만 생성, admin 예외
-//            throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
-//        }
+        CurrentUser user = currentUserProvider.current();
+        String dealerName = warehousePort.warehouseName(command.dealerWarehouseCode()); // 딜러명 스냅샷
+        // 딜러명 미해결(코드 폴백=조회 실패)이면 fail-fast: 코드-as-이름 박제 방지 + 이름축 인가 오작동 방지.
+        if (dealerName == null || dealerName.equals(command.dealerWarehouseCode())) {
+            throw new ApiException(ErrorCode.WAREHOUSE_NAME_UNAVAILABLE, command.dealerWarehouseCode());
+        }
+        // 본인 지점 앞으로만 생성(이름축). ADMIN 예외. 미인가는 라인 해석/채번 전 조기 차단.
+        if (!user.isAdmin() && !(user.isBranchUser() && dealerName.equals(user.warehouseName()))) {
+            throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
+        }
         List<CustomerOrderLine> lines = toDomainLines(command.lines()); // sku -> 스냅샷 채워 도메인 라인 생성
         String coNumber = repository.nextCoNumber(); // 채번 (CO-2026-xxxx)
-        String dealerName = warehousePort.warehouseName(command.dealerWarehouseCode()); // 딜러명 스냅샷
         CustomerOrder co = CustomerOrder.receive(coNumber, command.dealerWarehouseCode(), dealerName, // 생성 규칙은 도메인 생성 메서드에서 검증
                 command.customerName(), command.customerContact(), command.note(),
                 lines, user.employeeNumber(), LocalDateTime.now());
         return toResult(repository.save(co)); // 저장 후 Result
-        
     }
 
     @Override
     public CustomerOrderResult update(UpdateCustomerOrderCommand command) {
         CustomerOrder co = load(command.coNumber());
-        authorizeOwnerWrite(co, command.currentUser()); // 본인 지점/admin만 쓰기
+        authorizeOwnerWrite(co, currentUserProvider.current()); // 본인 지점/admin만 쓰기
         List<CustomerOrderLine> newLines = command.hasLineReplacement() ? toDomainLines(command.lines()) : null; // lines != null일 때만 교체
         co.updateContents(command.note(), newLines); // RECEIVED에서만 쓸 수 있다는 규칙은 도메인이 가짐
         return toResult(repository.save(co));
     }
 
     @Override
-    public CustomerOrderStatusChangeResult confirm(String coNumber, CurrentUser u) {
+    public CustomerOrderStatusChangeResult confirm(String coNumber) {
+        CurrentUser u = currentUserProvider.current();
         CustomerOrder co = load(coNumber);
         authorizeOwnerWrite(co, u);
         co.confirm(u.employeeNumber(), LocalDateTime.now()); // 상태전이 규칙(canConfirm)은 도메인이 가짐
@@ -99,7 +105,8 @@ public class CustomerOrderService implements CustomerOrderUseCase {
 
     // cancel / close 동일 패턴(도메인 cancel()/close()에 규칙 위임 후 저장)
     @Override
-    public CustomerOrderStatusChangeResult cancel(String coNumber, CurrentUser u) {
+    public CustomerOrderStatusChangeResult cancel(String coNumber) {
+        CurrentUser u = currentUserProvider.current();
         CustomerOrder co = load(coNumber);
         authorizeOwnerWrite(co, u);
         co.cancel(u.employeeNumber(), LocalDateTime.now());
@@ -108,7 +115,8 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     }
 
     @Override
-    public CustomerOrderStatusChangeResult close(String coNumber, CurrentUser currentUser) {
+    public CustomerOrderStatusChangeResult close(String coNumber) {
+        CurrentUser currentUser = currentUserProvider.current();
         CustomerOrder co = load(coNumber);
         authorizeOwnerWrite(co, currentUser);
         co.close(currentUser.employeeNumber(), LocalDateTime.now());
@@ -123,19 +131,19 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     }
 
     // 조회 권한: HQ는 전체, 지점은 본인 것만
-    private void authorizeRead(CustomerOrder co, CurrentUser u) { //
-//        if (u.isHq()) return;
-        if (!co.ownedByWarehouse(u.warehouseCode())) {
+    private void authorizeRead(CustomerOrder co, CurrentUser u) {
+        if (u.isHq()) return; // 본사(ADMIN/HQ_*)는 전 지점 조회
+        if (!co.ownedByWarehouseName(u.warehouseName())) {
             throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
         }
     }
 
     // 쓰기 권한: admin 또는 (지점유저 && 본인소유)
     private void authorizeOwnerWrite(CustomerOrder co, CurrentUser u) {
-//        if (u.isAdmin()) return;
-//        if (!(u.isBranchUser() && co.ownedByWarehouse(u.warehouseCode()))) {
-//            throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
-//        }
+        if (u.isAdmin()) return;
+        if (!(u.isBranchUser() && co.ownedByWarehouseName(u.warehouseName()))) {
+            throw new ApiException(ErrorCode.CUSTOMER_ORDER_FORBIDDEN_WAREHOUSE);
+        }
     }
 
     // sku -> 상품 스냅샷 채워 라인 생성

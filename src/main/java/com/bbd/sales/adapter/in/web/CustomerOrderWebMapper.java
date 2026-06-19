@@ -7,7 +7,6 @@ import com.bbd.sales.application.command.SearchCustomerOrderQuery;
 import com.bbd.sales.application.command.UpdateCustomerOrderCommand;
 import com.bbd.sales.application.result.*;
 import com.bbd.sales.domain.CustomerOrderStatus;
-import com.bbd.sales.global.security.CurrentUser;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -17,22 +16,20 @@ import java.util.List;
 public class CustomerOrderWebMapper {
     public SearchCustomerOrderQuery toSearchQuery(
             CustomerOrderStatus status, String dealerWarehouseCode, String customerName, String requestedBy,
-            LocalDate startDate, LocalDate endDate, int page, int size, CurrentUser currentUser
+            LocalDate startDate, LocalDate endDate, int page, int size
     ) {
         return new SearchCustomerOrderQuery(
-                status, dealerWarehouseCode, customerName, requestedBy, startDate, endDate, page, size, currentUser
+                status, dealerWarehouseCode, customerName, requestedBy, startDate, endDate, page, size
         );
     }
 
-    public CreateCustomerOrderCommand toCreateCommand(CreateCustomerOrderRequest req, CurrentUser currentUser) {
-        return new CreateCustomerOrderCommand(req.dealerWarehouseCode(), req.customerName(), req.customerContact(), req.note(), toLineCommands(req.lines()), currentUser);
+    public CreateCustomerOrderCommand toCreateCommand(CreateCustomerOrderRequest req) {
+        return new CreateCustomerOrderCommand(req.dealerWarehouseCode(), req.customerName(), req.customerContact(), req.note(), toLineCommands(req.lines()));
     }
 
-    public UpdateCustomerOrderCommand toUpdateCommand(
-            String coNumber, UpdateCustomerOrderRequest req, CurrentUser currentUser
-    ) {
+    public UpdateCustomerOrderCommand toUpdateCommand(String coNumber, UpdateCustomerOrderRequest req) {
         return new UpdateCustomerOrderCommand(coNumber, req.note(),
-                req.lines() != null ? toLineCommands(req.lines()) : null, currentUser);
+                req.lines() != null ? toLineCommands(req.lines()) : null);
     }
 
     // Bean validation은 Spring 진입점(컨트롤러)에서만 동작하므로 private 메서드 파라미터에는 넣지 않음.

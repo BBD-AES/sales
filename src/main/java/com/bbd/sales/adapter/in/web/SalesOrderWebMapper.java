@@ -8,7 +8,6 @@ import com.bbd.sales.application.command.UpdateSalesOrderCommand;
 import com.bbd.sales.application.result.*;
 import com.bbd.sales.domain.SalesOrderPriority;
 import com.bbd.sales.domain.SalesOrderStatus;
-import com.bbd.sales.global.security.CurrentUser;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -16,8 +15,8 @@ import java.util.List;
 
 /**
  * 웹 경계 변환기.
- *  요청 DTO -> application 입력(Command/Query)
- *  application 출력(Result) -> 응답 DTO
+ * 요청 DTO -> application 입력(Command/Query)
+ * application 출력(Result) -> 응답 DTO
  * 이 매퍼 덕분에 application 은 web 타입을, web 은 application 내부 규칙을 서로 모른다.
  */
 @Component
@@ -29,28 +28,26 @@ public class SalesOrderWebMapper {
             SalesOrderStatus status, SalesOrderPriority priority,
             String toWarehouseCode, String requestedBy,
             LocalDate startDate, LocalDate endDate,
-            int page, int size, CurrentUser currentUser) {
+            int page, int size) {
         return new SearchSalesOrderQuery(
                 status, priority, toWarehouseCode, requestedBy,
-                startDate, endDate, page, size, currentUser);
+                startDate, endDate, page, size);
     }
 
-    public CreateSalesOrderCommand toCreateCommand(CreateSalesOrderRequest req, CurrentUser currentUser) {
+    public CreateSalesOrderCommand toCreateCommand(CreateSalesOrderRequest req) {
         return new CreateSalesOrderCommand(
                 req.toWarehouseCode(),
                 req.priority(),
                 req.note(),
-                toLineCommands(req.lines()),
-                currentUser);
+                toLineCommands(req.lines()));
     }
 
-    public UpdateSalesOrderCommand toUpdateCommand(String soNumber, UpdateSalesOrderRequest req, CurrentUser currentUser) {
+    public UpdateSalesOrderCommand toUpdateCommand(String soNumber, UpdateSalesOrderRequest req) {
         return new UpdateSalesOrderCommand(
                 soNumber,
                 req.priority(),
                 req.note(),
-                req.lines() != null ? toLineCommands(req.lines()) : null,
-                currentUser);
+                req.lines() != null ? toLineCommands(req.lines()) : null);
     }
 
     private List<SalesOrderLineCommand> toLineCommands(List<SalesOrderLineRequest> lines) {

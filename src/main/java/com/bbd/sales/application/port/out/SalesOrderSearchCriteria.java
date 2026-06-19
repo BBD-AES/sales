@@ -12,7 +12,8 @@ import java.time.LocalDateTime;
 public record SalesOrderSearchCriteria(
         SalesOrderStatus status,
         SalesOrderPriority priority,
-        String toWarehouseCode,
+        String toWarehouseCode, // HQ 선택 필터(코드 기준)
+        String toWarehouseName, // 지점 본인창고 스코핑(이름 기준)
         String requestedBy,
         LocalDateTime from,
         LocalDateTime to

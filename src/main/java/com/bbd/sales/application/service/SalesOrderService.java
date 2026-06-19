@@ -39,29 +39,36 @@ public class SalesOrderService implements SalesOrderUseCase {
     private final ProcurementPort procurementPort;
     private final ItemPort itemPort;
     private final WarehousePort warehousePort;
+    private final CurrentUserProvider currentUserProvider;
 
     // ============================ 조회 ============================
 
     @Override
     @Transactional(readOnly = true)
     public SalesOrderPageResult<SalesOrderSummaryResult> search(SearchSalesOrderQuery query) {
-        // 지점 사용자는 본인 창고만. 본사/관리자는 필터 그대로.
-        // 비-HQ인데 warehouseCode가 없으면(헤더 누락 등) fromScope가 null로 풀려 전체가 노출되므로 차단.
-        String fromScope = query.toWarehouseCode();
-//        if (!query.currentUser().isHq()) {
-//            String warehouseCode = query.currentUser().warehouseCode();
-//            if (warehouseCode == null || warehouseCode.isBlank()) {
-//                // 정상 경로에선 resolver 가 BRANCH_* 창고코드를 이미 강제(401). 여기선 방어용 + 의미상 '인증헤더 누락'.
-//                throw new ApiException(ErrorCode.AUTH_HEADER_REQUIRED);
-//            }
-//            fromScope = warehouseCode;   // 본인 창고로 강제(전달된 필터 무시)
-//        }
+        CurrentUser user = currentUserProvider.current();
+        // 본사/관리자: 전달된 창고 코드 필터 그대로. 지점: 본인 창고로 강제(이름축), 전달된 필터는 무시.
+        String codeFilter; // HQ 선택 필터(코드축)
+        String nameScope; // 지점 강제 스코핑(이름축)
+        if (user.isHq()) {
+            codeFilter = query.toWarehouseCode();
+            nameScope = null;
+        } else {
+            String warehouseName = user.warehouseName();
+            if (warehouseName == null || warehouseName.isBlank()) {
+                // 정상 경로에선 resolver 가 BRANCH의 tenancyName을 항상 채움. 방어용(인증 컨텍스트 불완전(.
+                throw new ApiException(ErrorCode.AUTH_HEADER_REQUIRED);
+            }
+            codeFilter = null; // 지점이 넘긴 코드 필터 무시 -> 타지점 열람 차단
+            nameScope = warehouseName;
+        }
 
         LocalDateTime from = query.startDate() != null ? query.startDate().atStartOfDay() : null;
         LocalDateTime to = query.endDate() != null ? query.endDate().atTime(LocalTime.MAX) : null;
 
         SalesOrderSearchCriteria criteria = new SalesOrderSearchCriteria(
-                query.status(), query.priority(), fromScope,
+                query.status(), query.priority(), codeFilter,
+                nameScope,
                 query.requestedBy(), from, to);
 
         SalesOrderPage page = repository.search(criteria, query.page(), query.size());
@@ -73,9 +80,9 @@ public class SalesOrderService implements SalesOrderUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public SalesOrderResult get(String soNumber, CurrentUser currentUser) {
+    public SalesOrderResult get(String soNumber) {
         SalesOrder so = load(soNumber);
-//        authorizeRead(so, currentUser); 이거 주석 처리(유저 지금안봄)
+        authorizeRead(so, currentUserProvider.current()); // 지점=본인창고만(이름축), HQ/ADMIN=전체.
         return toResult(so);
     }
 
@@ -83,33 +90,40 @@ public class SalesOrderService implements SalesOrderUseCase {
 
     @Override
     public SalesOrderResult create(CreateSalesOrderCommand command) {
-        CurrentUser user = command.currentUser();
-//        if (!user.isAdmin() && !(user.isBranchUser() && command.toWarehouseCode().equals(user.warehouseCode()))) {
-//            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
-//        }
+        CurrentUser user = currentUserProvider.current();
+
+        // 창고명 스냅샷: 생성 시점에 한 번 조회(이후 읽기는 원격 호출 0). 출발지(source)는 sales가 저장 안 함.
+        String toName = warehousePort.warehouseName(command.toWarehouseCode());
+        // 창고명 미해결(코드 폴백=조회 실패)이면 fail-fast: 코드를 이름으로 박제하면 이후 이름축 소유권검사가 영영 깨지고,
+        // 이름 기반 인가도 잘못 거부된다(인벤토리 다운 시 전 생성 차단). 코드-as-이름 저장 방지.
+        if (toName == null || toName.equals(command.toWarehouseCode())) {
+            throw new ApiException(ErrorCode.WAREHOUSE_NAME_UNAVAILABLE, command.toWarehouseCode());
+        }
+
+        // 본인 창고 앞으로만 생성(이름축). ADMIN 예외. 역할(BRANCH_*/ADMIN)은 @RequireRole이 커버.
+        // 가드를 라인 해석/번호 채번 전에 둬 미인가 요청은 item 호출/SO 번호 소모 없이 조기 차단.
+        if (!user.isAdmin() && !(user.isBranchUser() && toName.equals(user.warehouseName()))) {
+            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
+        }
 
         List<SalesOrderLine> lines = toDomainLines(command.lines());
         String soNumber = repository.nextSoNumber();
 
-        // 창고명 스냅샷: 생성 시점에 한 번만 조회해 박는다(이후 읽기는 원격 호출 0).
-        // 출발지(source)는 sales 가 저장하지 않음 -> HQ/충족 단계가 결정.
-        String fromName = warehousePort.warehouseName(command.toWarehouseCode());
 
         SalesOrder so = SalesOrder.request(
                 soNumber,
-                command.toWarehouseCode(), fromName,
+                command.toWarehouseCode(), toName,
                 command.priority(), command.note(), lines,
                 user.employeeNumber(), LocalDateTime.now());
 
         SalesOrder saved = repository.save(so);
-        eventPublisher.publishRequested(saved.soNumber());
         return toResult(saved);
     }
 
     @Override
     public SalesOrderResult update(UpdateSalesOrderCommand command) {
         SalesOrder so = load(command.soNumber());
-        authorizeOwnerWrite(so, command.currentUser());
+        authorizeOwnerWrite(so, currentUserProvider.current());
 
         List<SalesOrderLine> newLines = command.hasLineReplacement()
                 ? toDomainLines(command.lines())
@@ -117,7 +131,6 @@ public class SalesOrderService implements SalesOrderUseCase {
 
         so.updateContents(command.priority(), command.note(), newLines); // REQUESTED 검증은 도메인이
         SalesOrder saved = repository.save(so);
-        eventPublisher.publishUpdated(saved.soNumber());
         return toResult(saved);
     }
 
@@ -126,31 +139,39 @@ public class SalesOrderService implements SalesOrderUseCase {
 
     /** 헥사고날에서 필요성: 포트만 의존 -> 구현이 뭐든 무관*/
     @Override
-    public SalesOrderStatusChangeResult submit(String soNumber, CurrentUser currentUser) {
+    public SalesOrderStatusChangeResult submit(String soNumber) {
         SalesOrder so = load(soNumber);
-        authorizeSubmit(so, currentUser);
+        authorizeSubmit(so, currentUserProvider.current());
         LocalDateTime now = LocalDateTime.now();
         so.submit(now);                          // REQUESTED 검증은 도메인이
         repository.save(so);
-        // TODO: 현재는 SO id만 보내고 있지만, payload에 풍부한 데이터를 담아야 할 때 (객체상태포함) 데이터를 통째로 스냅샷으로 고정해야함(나중에 조회할때 상태 바뀐 상황 예방)
-        // eventPublisher.publishSubmitted(new SalesOrderSubmittedEvent(
-        //        so.soNumber(), so.requestedBy(), so.lines(), so.status(), now));
         eventPublisher.publishSubmitted(so.soNumber());
+        return statusChange(so, currentUserProvider.current().employeeNumber(), now, null);
+    }
+
+    @Override
+    public SalesOrderStatusChangeResult withdraw(String soNumber) {
+        CurrentUser currentUser = currentUserProvider.current();
+        SalesOrder so = load(soNumber);
+        authorizeOwnerWrite(so, currentUser); // 본인 지점 소유(취소와 동일 가드). 외부 호출 0(예약 전 상태).
+        LocalDateTime now = LocalDateTime.now();
+        so.withdraw(now);
+        repository.save(so);
         return statusChange(so, currentUser.employeeNumber(), now, null);
     }
 
     @Override
-    public SalesOrderStatusChangeResult cancel(String soNumber, CurrentUser currentUser) {
+    public SalesOrderStatusChangeResult cancel(String soNumber) {
         SalesOrder so = load(soNumber);
-        authorizeOwnerWrite(so, currentUser);
-        so.cancel(currentUser.employeeNumber(), LocalDateTime.now());
+        authorizeOwnerWrite(so, currentUserProvider.current());
+        so.cancel(currentUserProvider.current().employeeNumber(), LocalDateTime.now());
         repository.save(so);
-        eventPublisher.publishCanceled(so.soNumber());
-        return statusChange(so, currentUser.employeeNumber(), so.canceledAt(), null);
+        return statusChange(so, currentUserProvider.current().employeeNumber(), so.canceledAt(), null);
     }
 
     @Override
-    public SalesOrderStatusChangeResult approve(String soNumber, CurrentUser currentUser) {
+    public SalesOrderStatusChangeResult approve(String soNumber) {
+        CurrentUser currentUser = currentUserProvider.current();
         SalesOrder so = load(soNumber);
         authorizeDecision(currentUser);
         requireHqDecidable(so); // 외부 예약 호출 전 상태 선검증(예약 후 도메인 throw 시 고아 예약 방지)
@@ -164,14 +185,12 @@ public class SalesOrderService implements SalesOrderUseCase {
             procurementPort.requestPurchase(so.soNumber(), so.toWarehouseCode(), routing.shortfall());
         }
 
-        if (so.status() == SalesOrderStatus.IN_FULFILLMENT) eventPublisher.publishFulfilling(so.soNumber());
-        else eventPublisher.publishBackordered(so.soNumber());
-
         return statusChange(so, currentUser.employeeNumber(), so.approvedAt(), null);
     }
 
     @Override
-    public SalesOrderStatusChangeResult fulfillBackorder(String soNumber, CurrentUser currentUser) {
+    public SalesOrderStatusChangeResult fulfillBackorder(String soNumber) {
+        CurrentUser currentUser = currentUserProvider.current();
         SalesOrder so = load(soNumber);
         authorizeDecision(currentUser);
         requireBackordered(so); // 외부 예약 호출 전 상태 선검증
@@ -183,7 +202,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         repository.save(so);
 
         if (so.status() == SalesOrderStatus.IN_FULFILLMENT) {
-            eventPublisher.publishFulfilling(so.soNumber());
+//            eventPublisher.publishFulfilling(so.soNumber());
             return statusChange(so, currentUser.employeeNumber(), now, null);  // 전이 시각으로
         }
         // 아직 부족하면 BACKORDERED 유지(멱등 재시도 가능). 상태 불변이니 승인 시각 유지.
@@ -191,30 +210,32 @@ public class SalesOrderService implements SalesOrderUseCase {
     }
 
     @Override
-    public SalesOrderStatusChangeResult reject(String soNumber, String reason, CurrentUser currentUser) {
+    public SalesOrderStatusChangeResult reject(String soNumber, String reason) {
+        CurrentUser currentUser = currentUserProvider.current();
         SalesOrder so = load(soNumber);
         authorizeDecision(currentUser);
         so.reject(currentUser.employeeNumber(), reason, LocalDateTime.now()); // 사유 필수 검증은 도메인이
         repository.save(so);
-        eventPublisher.publishRejected(so.soNumber());
         return statusChange(so, currentUser.employeeNumber(), so.rejectedAt(), so.rejectedReason());
     }
 
     @Override
-    public SalesOrderStatusChangeResult receive(String soNumber, CurrentUser currentUser) {
+    public SalesOrderStatusChangeResult receive(String soNumber) {
+        CurrentUser currentUser = currentUserProvider.current();
         SalesOrder so = load(soNumber);
         authorizeOwnerWrite(so, currentUser);
 
         so.receive(currentUser.employeeNumber(), LocalDateTime.now()); // APPROVED 검증은 도메인이
         repository.save(so);
 
-        // 유일하게 실재고가 움직이는 지점. destination=지점(from); source 는 Inventory 가 soNumber 로 해석.
-        // 정합성: Inventory 호출 실패 시 이 트랜잭션이 롤백되어 수령도 취소됨(동기 호출 결속).
-        inventoryPort.transferForSalesOrderReceive(
-                so.soNumber(), so.toWarehouseCode(),
-                currentUser.employeeNumber(), toTransferLines(so));
-
+        // inventory가 listen할 예정
         eventPublisher.publishReceived(so.soNumber());
+//        // 실재고 이동(예약분 출고). 동기: Inventory 호출 실패 시 이 트랜잭션 롤백 → 수령도 취소(정합성 결속).
+//        // (인벤토리는 동기 issue REST를 구현 — 이벤트 소비자 없음. 어댑터 실연동 전엔 스텁 no-op.)
+//        inventoryPort.transferForSalesOrderReceive(
+//                so.soNumber(), so.toWarehouseCode(),
+//                currentUser.employeeNumber(), toTransferLines(so));
+
         return statusChange(so, currentUser.employeeNumber(), so.receivedAt(), null);
     }
 
@@ -291,34 +312,33 @@ public class SalesOrderService implements SalesOrderUseCase {
      *       RECEIVED 전이로 통합했기에 별도 ship 권한이 없다(도착확인=지점 몫).
      */
     private void authorizeRead(SalesOrder so, CurrentUser user) {
-//        if (user.isHq()) return;
-        if (!so.ownedByWarehouse(user.warehouseCode())) {
+        if (user.isHq()) return;   // 본사(ADMIN/HQ_*)는 전 창고 조회 — 창고 비스코핑
+        if (!so.ownedByWarehouseName(user.warehouseName())) {
             throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
         }
     }
 
+    /** 쓰기(수정/취소/수령): 본인 창고의 지점 사용자(또는 ADMIN), 역할은 @RequireRole 가 커버. */
     private void authorizeOwnerWrite(SalesOrder so, CurrentUser user) {
-//        if (user.isAdmin()) return;
-//        if (!(user.isBranchUser() && so.ownedByWarehouse(user.warehouseCode()))) {
-//            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
-//        }
+        if (user.isAdmin()) return;
+        if (!(user.isBranchUser() && so.ownedByWarehouseName(user.warehouseName()))) {
+            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
+        }
     }
 
-    /** 제출(HQ로 올림)은 본인 창고의 지점 관리자(또는 ADMIN). */
+    /** 제출(HQ로 올림)은 본인 창고의 지점 관리자(또는 ADMIN). 역할은 @RequireRole({BRANCH_MANAGER, ADMIN})가 커버. */
     private void authorizeSubmit(SalesOrder so, CurrentUser user) {
-//        if (user.isAdmin()) return;
-//        if (!user.isBranchManager()) {
-//            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_ROLE);
-//        }
-        if (!so.ownedByWarehouse(user.warehouseCode())) {
+        if (user.isAdmin()) return;
+        if (!so.ownedByWarehouseName(user.warehouseName())) {
             throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
         }
     }
 
     private void authorizeDecision(CurrentUser user) {
-//        if (!user.canDecide()) {
-//            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_ROLE);
-//        }
+        // 방어적 인가(서비스 경계): @RequireRole(컨트롤러)가 1차 게이트지만, 비-웹 진입점 대비 서비스도 자체 강제.
+        if (!user.canDecide()) {
+            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_ROLE);
+        }
     }
 
     private List<SalesOrderLine> toDomainLines(List<SalesOrderLineCommand> lineCommands) {
@@ -331,6 +351,7 @@ public class SalesOrderService implements SalesOrderUseCase {
                 inactive.add(p.sku());
                 continue;
             }
+            // 사용자가 입력한 순서대로 라인 번호 저장
             lines.add(new SalesOrderLine(lineNo++, p.sku(), p.name(), p.unitPrice(), lc.quantity()));
         }
         if (!inactive.isEmpty()) {

@@ -36,4 +36,12 @@ public class CustomerOrderLineJpaEntity {
         this.unitPriceSnapshot = unitPriceSnapshot;
         this.quantity = quantity;
     }
+
+    /** lineNo(매칭 키)는 유지하고 내용 스냅샷만 기존 행에 복사(행 재사용 → UPDATE). */
+    void copyMutableFrom(CustomerOrderLineJpaEntity src) {
+        this.sku = src.sku;
+        this.nameSnapshot = src.nameSnapshot;
+        this.unitPriceSnapshot = src.unitPriceSnapshot;
+        this.quantity = src.quantity;
+    }
 }

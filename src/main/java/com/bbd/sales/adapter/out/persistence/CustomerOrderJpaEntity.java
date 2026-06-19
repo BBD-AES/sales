@@ -8,8 +8,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 @Entity
 @Table(name = "customer_order")
@@ -57,14 +56,6 @@ public class CustomerOrderJpaEntity {
     @OneToMany(mappedBy = "customerOrder", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<CustomerOrderLineJpaEntity> lines = new ArrayList<>();
 
-    public void replaceLines(List<CustomerOrderLineJpaEntity> newLines) {
-        this.lines.clear();
-        for (CustomerOrderLineJpaEntity line : newLines) {
-            line.setCustomerOrder(this);
-            this.lines.add(line);
-        }
-    }
-
     /**
      * INSERT 전용 생성자: 불변 식별자 + 스냅샷을 set-once로 고정한다.
      * 가변 컬럼(상태/타임스탭프/라인)은 이후 매퍼 applyTo가 채운다.
@@ -75,5 +66,25 @@ public class CustomerOrderJpaEntity {
         this.dealerName = dealerName;
         this.customerName = customerName;
         this.customerContact = customerContact;
+    }
+
+    public void replaceLines(List<CustomerOrderLineJpaEntity> newLines) {
+        Map<Integer, CustomerOrderLineJpaEntity> existing = new HashMap<>();
+        for (CustomerOrderLineJpaEntity l : this.lines) existing.put(l.getLineNo(), l);
+
+        Set<Integer> incoming = new HashSet<>();
+        for (CustomerOrderLineJpaEntity in : newLines) incoming.add(in.getLineNo());
+
+        this.lines.removeIf(l -> !incoming.contains(l.getLineNo())); // 빠진 라인 → orphan DELETE
+
+        for (CustomerOrderLineJpaEntity in : newLines) {
+            CustomerOrderLineJpaEntity ex = existing.get(in.getLineNo());
+            if (ex == null) {
+                in.setCustomerOrder(this);
+                this.lines.add(in);
+            } else {
+                ex.copyMutableFrom(in);
+            }
+        }
     }
 }

@@ -54,4 +54,15 @@ public class SalesOrderLineJpaEntity {
         this.unitPriceSnapshot = unitPriceSnapshot;
         this.quantity = quantity;
     }
+
+    /** lineNo(매칭 키)는 유지하고 내용/충족 필드만 기존 행에 복사(행 재사용 -> UPDATE). */
+    void copyMutableForm(SalesOrderLineJpaEntity src) {
+        this.sku = src.sku;
+        this.nameSnapshot = src.nameSnapshot;
+        this.unitPriceSnapshot = src.unitPriceSnapshot;
+        this.quantity = src.quantity;
+        this.reservedQuantity = src.reservedQuantity;
+        this.fulfillmentSource = src.fulfillmentSource;
+        this.fromWarehouseCode = src.fromWarehouseCode;
+    }
 }

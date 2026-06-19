@@ -3,7 +3,6 @@ package com.bbd.sales.adapter.in.web;
 import com.bbd.sales.adapter.in.web.dto.*;
 import com.bbd.sales.application.port.in.CustomerOrderUseCase;
 import com.bbd.sales.domain.CustomerOrderStatus;
-import com.bbd.sales.global.security.CurrentUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -28,42 +27,41 @@ public class CustomerOrderController {
             @RequestParam(required = false, name = "start_date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
             @RequestParam(required = false, name = "end_date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            CurrentUser currentUser
+            @RequestParam(defaultValue = "20") int size
     ) {
         return webMapper.toSummaryPageResponse(
-                customerOrderUseCase.search(webMapper.toSearchQuery(status, dealerWarehouseCode, customerName, requestedBy, startDate, endDate, page, size, currentUser))
+                customerOrderUseCase.search(webMapper.toSearchQuery(status, dealerWarehouseCode, customerName, requestedBy, startDate, endDate, page, size))
         );
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public CustomerOrderDetailResponse create(@Valid @RequestBody CreateCustomerOrderRequest request, CurrentUser currentUser) {
-        return webMapper.toDetailResponse(customerOrderUseCase.create(webMapper.toCreateCommand(request, currentUser)));
+    public CustomerOrderDetailResponse create(@Valid @RequestBody CreateCustomerOrderRequest request) {
+        return webMapper.toDetailResponse(customerOrderUseCase.create(webMapper.toCreateCommand(request)));
     }
 
     @GetMapping("/{coNumber}")
-    public CustomerOrderDetailResponse get(@PathVariable String coNumber, CurrentUser currentUser) {
-        return webMapper.toDetailResponse(customerOrderUseCase.get(coNumber, currentUser));
+    public CustomerOrderDetailResponse get(@PathVariable String coNumber) {
+        return webMapper.toDetailResponse(customerOrderUseCase.get(coNumber));
     }
 
     @PutMapping("/{coNumber}")
-    public CustomerOrderDetailResponse update(@PathVariable String coNumber, @Valid @RequestBody UpdateCustomerOrderRequest request, CurrentUser currentUser) {
-        return webMapper.toDetailResponse(customerOrderUseCase.update(webMapper.toUpdateCommand(coNumber, request, currentUser)));
+    public CustomerOrderDetailResponse update(@PathVariable String coNumber, @Valid @RequestBody UpdateCustomerOrderRequest request) {
+        return webMapper.toDetailResponse(customerOrderUseCase.update(webMapper.toUpdateCommand(coNumber, request)));
     }
 
     @PatchMapping("/{coNumber}/confirm")
-    public CustomerOrderStatusChangeResponse confirm(@PathVariable String coNumber, CurrentUser currentUser) {
-        return webMapper.toStatusChangeResponse(customerOrderUseCase.confirm(coNumber, currentUser));
+    public CustomerOrderStatusChangeResponse confirm(@PathVariable String coNumber) {
+        return webMapper.toStatusChangeResponse(customerOrderUseCase.confirm(coNumber));
     }
 
     @PatchMapping("/{coNumber}/cancel")
-    public CustomerOrderStatusChangeResponse cancel(@PathVariable String coNumber, CurrentUser currentUser) {
-        return webMapper.toStatusChangeResponse(customerOrderUseCase.cancel(coNumber, currentUser));
+    public CustomerOrderStatusChangeResponse cancel(@PathVariable String coNumber) {
+        return webMapper.toStatusChangeResponse(customerOrderUseCase.cancel(coNumber));
     }
 
     @PatchMapping("/{coNumber}/close")
-    public CustomerOrderStatusChangeResponse close(@PathVariable String coNumber, CurrentUser currentUser) {
-        return webMapper.toStatusChangeResponse(customerOrderUseCase.close(coNumber, currentUser));
+    public CustomerOrderStatusChangeResponse close(@PathVariable String coNumber) {
+        return webMapper.toStatusChangeResponse(customerOrderUseCase.close(coNumber));
     }
 }

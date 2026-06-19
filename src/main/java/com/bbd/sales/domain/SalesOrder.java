@@ -1,6 +1,7 @@
 package com.bbd.sales.domain;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -162,6 +163,15 @@ public class SalesOrder {
         this.status = SalesOrderStatus.SUBMITTED;
     }
 
+    /** 제출 회수. SUBMITTED → REQUESTED (HQ 결정 전, 요청자가 수정하려 되돌림). */
+    public void withdraw(LocalDateTime now) {
+        if (!status.canWithdraw()) {
+            throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_WITHDRAWABLE);
+        }
+        this.status = SalesOrderStatus.REQUESTED;
+        // TODO(audit): withdrawnBy/At 컬럼은 submit 감사 컬럼과 함께 별도 커밋.
+    }
+
     /** 취소. REQUESTED/SUBMITTED 에서만(요청자 본인 회수, HQ 손에 넘어가기 전까지). */
     public void cancel(String actor, LocalDateTime now) {
         if (!status.isCancelable()) {
@@ -289,6 +299,11 @@ public class SalesOrder {
     /** 본인 소속 창고(요청 지점) 자원인지 판단 키. */
     public boolean ownedByWarehouse(String warehouseCode) {
         return toWarehouseCode.equals(warehouseCode);
+    }
+
+    /** 본인 소속 창고인지 - 창고 '이름' 기준. 신원 스냅샷이 tenancyName(이름)만 주므로 이름축으로 비교. */
+    public boolean ownedByWarehouseName(String warehouseName) {
+        return toWarehouseName != null && toWarehouseName.equals(warehouseName); // fail-closed(스냅샷 null이면 소유 아님)
     }
 
     // --- 조회용 getter (불변 노출) ---

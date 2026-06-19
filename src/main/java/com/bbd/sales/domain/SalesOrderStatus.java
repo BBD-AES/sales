@@ -34,6 +34,11 @@ public enum SalesOrderStatus {
         return this == REQUESTED;
     }
 
+    /** 제출 회수 가능한 상태인가 (SUBMITTED -> REQUESTED, HQ 결정 전) */
+    public boolean canWithdraw() {
+        return this == SUBMITTED;
+    }
+
     /** 요청자 취소가 가능한 상태인가 (HQ 손에 넘어가기 전까지). */
     public boolean isCancelable() {
         return this == REQUESTED || this == SUBMITTED;

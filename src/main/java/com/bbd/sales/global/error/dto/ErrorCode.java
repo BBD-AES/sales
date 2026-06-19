@@ -18,6 +18,8 @@ public enum ErrorCode {
     SALES_ORDER_NOT_SUBMITTABLE(HttpStatus.CONFLICT, "SO008", "REQUESTED 상태의 출고 요청만 HQ로 제출할 수 있습니다."),
     SALES_ORDER_NOT_CANCELABLE(HttpStatus.CONFLICT, "SO009", "REQUESTED 또는 SUBMITTED 상태에서만 취소할 수 있습니다."),
     SALES_ORDER_NOT_FULFILLABLE(HttpStatus.CONFLICT, "SO010", "BACKORDERED 상태의 출고 요청만 충족 처리할 수 있습니다."),
+    SALES_ORDER_NOT_WITHDRAWABLE(HttpStatus.CONFLICT, "SO011", "SUBMITTED 상태의 출고 요청만 회수할 수 있습니다."),
+
 
     AUTH_HEADER_REQUIRED(HttpStatus.UNAUTHORIZED, "AUTH001", "인증 헤더가 필요합니다."),
     AUTH_ROLE_INVALID(HttpStatus.BAD_REQUEST, "AUTH002", "알 수 없는 역할입니다."),
@@ -31,7 +33,9 @@ public enum ErrorCode {
     CUSTOMER_ORDER_NOT_CANCELABLE(HttpStatus.CONFLICT, "CO005", "OPEN 또는 CONFIRMED 상태에서만 취소할 수 있습니다."),
     CUSTOMER_ORDER_NOT_CLOSABLE(HttpStatus.CONFLICT, "CO006", "CONFIRMED 상태의 수주만 종료할 수 있습니다."),
 
-    ITEM_NOT_ORDERABLE(HttpStatus.BAD_REQUEST, "ITEM001", "주문할 수 없는 상품(SKU)이 포함되어 있습니다.")
+    ITEM_NOT_ORDERABLE(HttpStatus.BAD_REQUEST, "ITEM001", "주문할 수 없는 상품(SKU)이 포함되어 있습니다."),
+    ITEM_NOT_FOUND(HttpStatus.BAD_REQUEST, "ITEM002", "존재하지 않는 상품(SKU)입니다."),
+    WAREHOUSE_NAME_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "WH001", "창고 정보를 조회할 수 없습니다. 잠시 후 다시 시도해 주세요."),
     ;
 
     private final HttpStatus status;

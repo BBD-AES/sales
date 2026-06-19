@@ -381,4 +381,5 @@ class CustomerOrderTest {
                 .extracting(e -> ((CustomerOrderStateException) e).violation())
                 .isEqualTo(expected);
     }
+
 }

@@ -22,38 +22,8 @@ public class OutboxSalesOrderEventPublisher implements SalesOrderEventPublisher 
     private final ObjectMapper objectMapper; // Boot 자동 구성 빈
 
     @Override
-    public void publishRequested(String soNumber) {
-        enqueue("requested", soNumber);
-    }
-
-    @Override
-    public void publishUpdated(String soNumber) {
-        enqueue("updated", soNumber);
-    }
-
-    @Override
     public void publishSubmitted(String soNumber) {
         enqueue("submitted", soNumber);
-    }
-
-    @Override
-    public void publishCanceled(String soNumber) {
-        enqueue("canceled", soNumber);
-    }
-
-    @Override
-    public void publishFulfilling(String soNumber) {
-        enqueue("fulfilling", soNumber);
-    }
-
-    @Override
-    public void publishBackordered(String soNumber) {
-        enqueue("backordered", soNumber);
-    }
-
-    @Override
-    public void publishRejected(String soNumber) {
-        enqueue("rejected", soNumber);
     }
 
     @Override

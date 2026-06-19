@@ -1,8 +1,7 @@
 package com.bbd.sales.notification;
 
-import com.bbd.sales.global.error.ApiException;
-import com.bbd.sales.global.error.dto.ErrorCode;
-import com.bbd.sales.global.security.CurrentUser;
+import com.bbd.securitycore.adapter.in.annotation.RequireRole;
+import com.bbd.securitycore.domain.UserRole;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,11 +15,10 @@ import java.util.List;
 public class NotificationController {
     private final NotificationRepository notifications;
 
+    // HQ 알림함 — HQ 직무만 열람.
+    @RequireRole({UserRole.HQ_MANAGER, UserRole.HQ_STAFF, UserRole.ADMIN})
     @GetMapping
-    public List<Notification> inbox(CurrentUser currentUser) { // 리졸버가 헤더에서 주입
-//        if (!currentUser.isHq()) {
-//            throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_ROLE);
-//        }
+    public List<Notification> inbox() {
         return notifications.findTop100ByTargetRoleAndReadFalseOrderByIdDesc("HQ_MANAGER");
     }
 }

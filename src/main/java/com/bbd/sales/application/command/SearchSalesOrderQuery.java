@@ -2,7 +2,6 @@ package com.bbd.sales.application.command;
 
 import com.bbd.sales.domain.SalesOrderPriority;
 import com.bbd.sales.domain.SalesOrderStatus;
-import com.bbd.sales.global.security.CurrentUser;
 
 import java.time.LocalDate;
 
@@ -18,7 +17,6 @@ public record SearchSalesOrderQuery(
         LocalDate startDate,
         LocalDate endDate,
         int page,
-        int size,
-        CurrentUser currentUser
+        int size
 ) {
 }

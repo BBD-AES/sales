@@ -72,6 +72,10 @@ spring:
   config:
     import: optional:file:.env[.properties]
 
+  jackson:
+    deserialization:
+      accept-float-as-int: false
+
 bbd:
   security:
     enabled: true
@@ -81,12 +85,6 @@ bbd:
       - /swagger-ui/**
       - /swagger-ui.html
       - /v3/api-docs/**
-
-# 레거시 창고 어댑터(InventoryHttpConfig)가 ${inventory.base-url} 를 요구한다(기본값 없음).
-# 이 프로필(public)에 없으면 컨텍스트 기동 실패(placeholder 미해결). 빈 생성 시 네트워크 호출은 없으므로 값이 틀려도 기동은 됨.
-# application.yml 과 동일 형태로 둠. 신규 @ImportHttpServices(bbd-inventory-service)로 완전 이관되면 제거 가능.
-inventory:
-  base-url: ${INVENTORY_BASE_URL:http://localhost:8081}
 
 # Actuator 헬스: context-path 하위 노출 → /sales/actuator/health (+ /liveness, /readiness).
 # permit-all-paths 에 /actuator/health(/**) 가 있어 인증 없이 통과.
@@ -112,5 +110,5 @@ springdoc:
 logging:
   level:
     root: info
-    org.hibernate.SQL: debug
-    org.hibernate.orm.jdbc.bind: trace
+    org.hibernate.SQL: warn
+    org.hibernate.orm.jdbc.bind: warn

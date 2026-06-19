@@ -116,6 +116,11 @@ public class CustomerOrder {
         return dealerWarehouseCode != null && dealerWarehouseCode.equals(warehouseCode);
     }
 
+    /** 본인 소속 지점인지 - 지점 '이름' 기준(신원 스냅샷이 tenancyName=이름만 제공). */
+    public boolean ownedByWarehouseName(String warehouseName) {
+        return dealerName != null && dealerName.equals(warehouseName);
+    }
+
     public String coNumber() {
         return coNumber;
     }

@@ -1,15 +1,12 @@
 package com.bbd.sales.global.security;
 
 /**
- * 인증 주체. 지금은 임시로 X-Employee-Number / X-Role / X-Warehouse-Code 헤더에서 만든다.
- * JWT 도입 시 이 객체를 채우는 곳(CurrentUserArgumentResolver)만 교체하면 된다.
- *
  * '권한 판단' 헬퍼를 여기 두어 서비스의 if 문이 의미로 읽히게 한다.
  */
 public record CurrentUser(
         String employeeNumber,
         RoleType role,
-        String warehouseCode
+        String warehouseName
 ) {
     public boolean isAdmin() {
         return role == RoleType.ADMIN;
