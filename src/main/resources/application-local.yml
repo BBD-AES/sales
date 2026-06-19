@@ -1,0 +1,108 @@
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: /sales
+
+sales:
+  inventory:
+    mode: stub
+
+spring:
+  application:
+    name: sales
+
+  threads:
+    virtual:
+      enabled: true
+
+  datasource:
+    url: ${DB_ENDPOINT}
+    username: ${DB_NAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    defer-datasource-initialization: ${DEFER_DATASOURCE_INITIALIZATION:true}
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          time_zone: Asia/Seoul
+        default_schema: ${DB_SCHEMA:bbd}
+
+  sql:
+    init:
+      mode: ${SQL_INIT_MODE:always}
+      encoding: UTF-8
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka.inwoohub.com:9092}
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:sales-hq-notification}
+      auto-offset-reset: ${KAFKA_OFFSET_RESET:earliest}
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+  http:
+    serviceclient:
+      bbd-user-service:
+        base-url: ${USER_SERVICE_BASE_URL:http://localhost:8081/user}
+      bbd-item-service:
+        base-url: ${ITEM_SERVICE_BASE_URL:http://localhost:8082/item}
+      bbd-inventory-service:
+        base-url: ${INVENTORY_SERVICE_BASE_URL:http://localhost:8083/inventory}
+      bbd-procurement-service:
+        base-url: ${PROCUREMENT_SERVICE_BASE_URL:http://localhost:8084/procurement}
+      bbd-sales-service:
+        base-url: ${SALES_SERVICE_BASE_URL:http://localhost:8085/sales}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  config:
+    import: optional:file:.env[.properties]
+
+  jackson:
+    deserialization:
+      accept-float-as-int: false
+      fail-on-unknown-properties: false # 응답에 inventory가 필드 추가해도 안 깨
+
+bbd:
+  security:
+    enabled: true
+    permit-all-paths:
+      - /actuator/health
+      - /actuator/health/**
+      - /swagger-ui/**
+      - /swagger-ui.html
+      - /v3/api-docs/**
+      - /test/**
+
+
+springdoc:
+  swagger-ui:
+    tags-sorter: alpha
+    operations-sorter: alpha
+    url: /sales/v3/api-docs
+    config-url: /sales/v3/api-docs/swagger-config
+
+logging:
+  level:
+    root: info
+    org.hibernate.SQL: warn
+    org.hibernate.orm.jdbc.bind: warn
