@@ -6,4 +6,5 @@ package com.bbd.sales.application.port.out;
  */
 public interface SalesOrderEventPublisher {
     void publishSubmitted(String soNumber);
+    void publishReceived(String soNumber); // inventory가 듣고 할당기준 출고(on-hand 차감 + reserved 해제)
 }
