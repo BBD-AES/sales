@@ -6,7 +6,6 @@ import com.bbd.sales.application.port.out.ProductSnapshot;
 import com.bbd.sales.global.error.ApiException;
 import com.bbd.sales.global.error.dto.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 
@@ -20,8 +19,7 @@ import java.math.BigDecimal;
  * 그래서 item 미가용/미존재면 실패를 그대로 전파해 주문 생성을 막는다(빠른 실패).
  * -> 비핵심 표시값(창고명)=폴백, 핵심 주문값(가격)=실패.
  */
-@Primary
-@Component
+@Component // #40: ItemStubAdapter 제거로 ItemPort 단일 구현 → @Primary 불필요
 @RequiredArgsConstructor
 public class ItemRestAdapter implements ItemPort {
 
