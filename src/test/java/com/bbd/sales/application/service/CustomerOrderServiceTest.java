@@ -2,9 +2,12 @@ package com.bbd.sales.application.service;
 
 import com.bbd.sales.application.command.CreateCustomerOrderCommand;
 import com.bbd.sales.application.command.CustomerOrderLineCommand;
+import com.bbd.sales.application.command.SearchCustomerOrderQuery;
 import com.bbd.sales.application.command.UpdateCustomerOrderCommand;
 import com.bbd.sales.application.port.out.CurrentUserProvider;
+import com.bbd.sales.application.port.out.CustomerOrderPage;
 import com.bbd.sales.application.port.out.CustomerOrderRepository;
+import com.bbd.sales.application.port.out.CustomerOrderSearchCriteria;
 import com.bbd.sales.application.port.out.ItemPort;
 import com.bbd.sales.application.port.out.ProductSnapshot;
 import com.bbd.sales.application.port.out.WarehousePort;
@@ -34,6 +37,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -211,6 +216,60 @@ class CustomerOrderServiceTest {
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CUSTOMER_ORDER_NOT_FOUND);
+    }
+
+    // ---------------------------------------------------------------------
+    // search — 역할별 스코핑(지점=본인지점 이름축 강제, HQ=코드 필터 통과)
+    // ---------------------------------------------------------------------
+
+    private SearchCustomerOrderQuery searchQuery(String dealerWarehouseCode) {
+        return new SearchCustomerOrderQuery(null, dealerWarehouseCode, null, null, null, null, 0, 20);
+    }
+
+    @Test
+    @DisplayName("search: 지점유저는 본인지점(이름축)으로 강제되고, 전달한 코드 필터는 무시(타지점 열람 차단)")
+    void search_branchUser_forcesOwnDealerName_ignoresCodeFilter() {
+        when(currentUserProvider.current()).thenReturn(BRANCH); // 강남(WH_NAME)
+        when(repository.search(any(), anyInt(), anyInt()))
+                .thenReturn(new CustomerOrderPage(List.of(), 0, 0, 20));
+
+        service.search(searchQuery("WH-BR-OTHER")); // 지점이 타지점 코드를 넘겨도
+
+        ArgumentCaptor<CustomerOrderSearchCriteria> cap = ArgumentCaptor.forClass(CustomerOrderSearchCriteria.class);
+        verify(repository).search(cap.capture(), eq(0), eq(20));
+        CustomerOrderSearchCriteria c = cap.getValue();
+        assertThat(c.dealerName()).isEqualTo(WH_NAME);   // 본인지점으로 강제
+        assertThat(c.dealerWarehouseCode()).isNull();    // 넘긴 코드 필터는 무시
+    }
+
+    @Test
+    @DisplayName("search: HQ는 전달한 딜러 코드 필터 그대로, 이름축 스코핑 없음(전 지점 조회)")
+    void search_hq_passesCodeFilter_noNameScope() {
+        when(currentUserProvider.current()).thenReturn(HQ);
+        when(repository.search(any(), anyInt(), anyInt()))
+                .thenReturn(new CustomerOrderPage(List.of(), 0, 0, 20));
+
+        service.search(searchQuery("WH-BR-777"));
+
+        ArgumentCaptor<CustomerOrderSearchCriteria> cap = ArgumentCaptor.forClass(CustomerOrderSearchCriteria.class);
+        verify(repository).search(cap.capture(), eq(0), eq(20));
+        CustomerOrderSearchCriteria c = cap.getValue();
+        assertThat(c.dealerWarehouseCode()).isEqualTo("WH-BR-777"); // HQ 코드 필터 통과
+        assertThat(c.dealerName()).isNull();                         // 이름축 스코핑 없음
+    }
+
+    @Test
+    @DisplayName("search: 지점유저인데 신원에 지점명이 없으면 AUTH_HEADER_REQUIRED, 조회 위임 안 함")
+    void search_branchUser_missingWarehouseName_throws() {
+        CurrentUser branchNoName = new CurrentUser("BRX", RoleType.BRANCH_STAFF, null);
+        when(currentUserProvider.current()).thenReturn(branchNoName);
+
+        assertThatThrownBy(() -> service.search(searchQuery(null)))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.AUTH_HEADER_REQUIRED);
+
+        verify(repository, never()).search(any(), anyInt(), anyInt());
     }
 
     // ---------------------------------------------------------------------

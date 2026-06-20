@@ -34,19 +34,26 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     @Override
     @Transactional(readOnly = true)
     public SalesOrderPageResult<CustomerOrderSummaryResult> search(SearchCustomerOrderQuery query) {
-        String dealerScope = query.dealerWarehouseCode(); // 딜러 필터
-//        if (!query.currentUser().isHq()) {
-//            String wc = query.currentUser().warehouseCode();
-//            // HQ 아닌데 창고코드 없으면 차단함
-//            if (wc == null || wc.isBlank()) {
-//                throw new ApiException(ErrorCode.AUTH_HEADER_REQUIRED);
-//            }
-//            dealerScope = wc; // 볼 수 있는 지점을 본인 지점으로 강제함
-//        }
+        CurrentUser user = currentUserProvider.current();
+        // 본사(HQ/ADMIN): 전달된 딜러 코드 필터 그대로. 지점: 본인지점(이름축)으로 강제, 전달된 코드 필터는 무시(타지점 열람 차단).
+        String codeFilter; // HQ 선택 필터(코드축)
+        String nameScope;  // 지점 강제 스코핑(이름축 = dealerName)
+        if (user.isHq()) {
+            codeFilter = query.dealerWarehouseCode();
+            nameScope = null;
+        } else {
+            String warehouseName = user.warehouseName();
+            if (warehouseName == null || warehouseName.isBlank()) {
+                // 정상 경로에선 resolver 가 BRANCH 의 지점명을 항상 채움. 방어용(인증 컨텍스트 불완전).
+                throw new ApiException(ErrorCode.AUTH_HEADER_REQUIRED);
+            }
+            codeFilter = null;        // 지점이 넘긴 코드 필터 무시 → 타지점 열람 차단
+            nameScope = warehouseName;
+        }
         LocalDateTime from = query.startDate() != null ? query.startDate().atStartOfDay() : null; // 날짜 경계 변환
         LocalDateTime to = query.endDate() != null ? query.endDate().atTime(LocalTime.MAX) : null;
         CustomerOrderSearchCriteria criteria = new CustomerOrderSearchCriteria( // 권한 반영된 '순수 필터'로 변환
-                query.status(), dealerScope, query.customerName(), query.requestedBy(), from, to
+                query.status(), codeFilter, nameScope, query.customerName(), query.requestedBy(), from, to
         );
         CustomerOrderPage page = repository.search(criteria, query.page(), query.size()); // 쿼리 방식(QueryDSL/Specification인지, JPQL/nativeSQL인지 등등)을 모르는 포트로 위임
         List<CustomerOrderSummaryResult> items = page.content().stream().map(this::toSummary).toList(); // 도메인 -> Result 변환
