@@ -209,9 +209,9 @@ public class SalesOrderService implements SalesOrderUseCase {
     @Override
     public SalesOrderStatusChangeResult approve(String soNumber) {
         CurrentUser user = currentUserProvider.current();
+        authorizeDecision(user); // 역할 인가를 락 획득 전에 — 비인가 호출이 행 락을 잡아 정상 전이를 막는 것 방지(CodeRabbit #55)
         repository.lockForUpdate(soNumber); // #55 P1: 확정+구매통지(아웃박스) 동시 진입 직렬화(낙관락 보강, 깔끔한 충돌 의미)
         SalesOrder so = load(soNumber);
-        authorizeDecision(user);
         so.confirmByHq(user.employeeNumber(), LocalDateTime.now());   // reserveAndRoute 호출 없음!
         repository.save(so);
         // 부족분 남으면(BACKORDERED) procurement에 통지(기존 이벤트 그대로)
@@ -226,9 +226,9 @@ public class SalesOrderService implements SalesOrderUseCase {
     @Override
     public SalesOrderStatusChangeResult fulfillBackorder(String soNumber) {
         CurrentUser user = currentUserProvider.current();
+        authorizeDecision(user); // 역할 인가를 락 획득 전에(CodeRabbit #55)
         repository.lockForUpdate(soNumber); // #55 P1: 백오더 재확정 동시 진입 직렬화
         SalesOrder so = load(soNumber);
-        authorizeDecision(user);
         LocalDateTime now = LocalDateTime.now();
         so.refulfill(now);
         repository.save(so);
@@ -260,9 +260,11 @@ public class SalesOrderService implements SalesOrderUseCase {
     @Override
     public SalesOrderStatusChangeResult receive(String soNumber) {
         CurrentUser currentUser = currentUserProvider.current();
-        repository.lockForUpdate(soNumber); // #55 P1: 수령(출고이벤트 발행) 동시 진입 직렬화 — on-hand 이중차감 창 축소
-        SalesOrder so = load(soNumber);
-        authorizeOwnerWrite(so, currentUser);
+        // 소유권 인가는 SO가 필요 → 비잠금 선로드로 먼저 검사(소유 필드는 불변이라 비잠금 읽기로 충분).
+        // 비인가(타지점)는 락을 잡기 전에 차단 — 락-증폭 방지(CodeRabbit #55).
+        authorizeOwnerWrite(load(soNumber), currentUser);
+        repository.lockForUpdate(soNumber); // #55 P1: 인가 통과 후 행 잠금(수령=출고이벤트 발행 동시 진입 직렬화 — on-hand 이중차감 창 축소)
+        SalesOrder so = load(soNumber);     // 잠긴 최신 행으로 재적재 — 전이 검증/저장은 이 인스턴스로(스테일 이중적용 방지)
 
         so.receive(currentUser.employeeNumber(), LocalDateTime.now()); // APPROVED 검증은 도메인이
         repository.save(so);

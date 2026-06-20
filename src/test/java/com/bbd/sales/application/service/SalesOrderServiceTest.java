@@ -138,13 +138,13 @@ class SalesOrderServiceTest {
     @Test
     @DisplayName("approve: HQ 권한 아니면 거부, 구매요청 안 함")
     void approve_nonHqRole_forbidden() {
-        SalesOrder so = submitted("OIL-FLT-001", 10);
         when(currentUserProvider.current()).thenReturn(STAFF);
-        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
         assertThatThrownBy(() -> service.approve("SO-1"))
                 .isInstanceOf(ApiException.class);
 
+        // 역할 인가가 락/로드 전에 차단 → repository 미접근(특히 락 미획득). CodeRabbit #55.
+        verify(repository, never()).lockForUpdate(any());
         verify(procurementPort, never()).requestPurchase(any(), any(), anyList());
     }
 
@@ -460,6 +460,7 @@ class SalesOrderServiceTest {
         assertThatThrownBy(() -> service.receive("SO-1"))
                 .isInstanceOf(ApiException.class);
         verify(eventPublisher, never()).publishReceived(any());
+        verify(repository, never()).lockForUpdate(any()); // 소유권 인가 실패 → 락 미획득(인가가 락 전). CodeRabbit #55.
     }
 
     // ===== 생성 소유권 (Step 3) =====
