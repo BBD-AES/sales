@@ -7,7 +7,9 @@ import com.bbd.sales.domain.SalesOrderStatus;
 import com.bbd.securitycore.adapter.in.annotation.RequireRole;
 import com.bbd.securitycore.domain.UserRole;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -47,8 +49,8 @@ public class SalesOrderController {
             @RequestParam(required = false, name = "received_by") String receivedBy,
             @RequestParam(required = false, name = "start_date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
             @RequestParam(required = false, name = "end_date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size  // 기존 0 기본값 버그 -> 20
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Positive int size  // 음수 page/비양수 size 는 경계에서 거부(silent clamp 의존 X)
     ) {
         return webMapper.toSummaryPageResponse(
                 salesOrderUseCase.search(webMapper.toSearchQuery(

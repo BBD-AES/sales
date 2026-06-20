@@ -36,28 +36,28 @@ ALTER TABLE IF EXISTS sales_order_line DROP CONSTRAINT IF EXISTS sales_order_lin
 UPDATE sales_order_line SET fulfillment_source = 'BACKORDERED' WHERE fulfillment_source = 'PURCHASE';
 
 -- 라인 (해당 주문에 라인이 없을 때만 삽입 -> 멱등)
-INSERT INTO sales_order_line (so_number, line_no, sku, name_snapshot, unit_price_snapshot, quantity, reserved_quantity, fulfillment_source, from_warehouse_code)
-SELECT so.so_number, 1, 'OIL-FLT-001', '오일필터', 3200, 50, 50, 'STOCK', 'WH-HQ-001' FROM sales_order so
+INSERT INTO sales_order_line (so_number, line_no, sku, name_snapshot, unit_price_snapshot, quantity, reserved_quantity, fulfillment_source)
+SELECT so.so_number, 1, 'OIL-FLT-001', '오일필터', 3200, 50, 50, 'STOCK' FROM sales_order so
 WHERE so.so_number = 'SO-2026-0001' AND NOT EXISTS (SELECT 1 FROM sales_order_line l WHERE l.so_number = so.so_number);
 
-INSERT INTO sales_order_line (so_number, line_no, sku, name_snapshot, unit_price_snapshot, quantity, reserved_quantity, fulfillment_source, from_warehouse_code)
-SELECT so.so_number, 1, 'BRK-PAD-RR-001', '브레이크 패드 (후륜)', 35000, 15, 15, 'STOCK', 'WH-HQ-001' FROM sales_order so
+INSERT INTO sales_order_line (so_number, line_no, sku, name_snapshot, unit_price_snapshot, quantity, reserved_quantity, fulfillment_source)
+SELECT so.so_number, 1, 'BRK-PAD-RR-001', '브레이크 패드 (후륜)', 35000, 15, 15, 'STOCK' FROM sales_order so
 WHERE so.so_number = 'SO-2026-0002' AND NOT EXISTS (SELECT 1 FROM sales_order_line l WHERE l.so_number = so.so_number);
 
-INSERT INTO sales_order_line (so_number, line_no, sku, name_snapshot, unit_price_snapshot, quantity, reserved_quantity, fulfillment_source, from_warehouse_code)
-SELECT so.so_number, 1, 'BAT-12V-60', '배터리 12V 60Ah', 95000, 10, 0, NULL, NULL FROM sales_order so
+INSERT INTO sales_order_line (so_number, line_no, sku, name_snapshot, unit_price_snapshot, quantity, reserved_quantity, fulfillment_source)
+SELECT so.so_number, 1, 'BAT-12V-60', '배터리 12V 60Ah', 95000, 10, 0, NULL FROM sales_order so
 WHERE so.so_number = 'SO-2026-0003' AND NOT EXISTS (SELECT 1 FROM sales_order_line l WHERE l.so_number = so.so_number);
 
-INSERT INTO sales_order_line (so_number, line_no, sku, name_snapshot, unit_price_snapshot, quantity, reserved_quantity, fulfillment_source, from_warehouse_code)
-SELECT so.so_number, 1, 'RLY-12V-30A-01', '릴레이 12V 30A', 8500, 20, 0, 'BACKORDERED', NULL FROM sales_order so
+INSERT INTO sales_order_line (so_number, line_no, sku, name_snapshot, unit_price_snapshot, quantity, reserved_quantity, fulfillment_source)
+SELECT so.so_number, 1, 'RLY-12V-30A-01', '릴레이 12V 30A', 8500, 20, 0, 'BACKORDERED' FROM sales_order so
 WHERE so.so_number = 'SO-2026-0004' AND NOT EXISTS (SELECT 1 FROM sales_order_line l WHERE l.so_number = so.so_number);
 
-INSERT INTO sales_order_line (so_number, line_no, sku, name_snapshot, unit_price_snapshot, quantity, reserved_quantity, fulfillment_source, from_warehouse_code)
-SELECT so.so_number, 1, 'TIR-225-45-17', '타이어 225/45 R17', 135000, 5, 0, NULL, NULL FROM sales_order so
+INSERT INTO sales_order_line (so_number, line_no, sku, name_snapshot, unit_price_snapshot, quantity, reserved_quantity, fulfillment_source)
+SELECT so.so_number, 1, 'TIR-225-45-17', '타이어 225/45 R17', 135000, 5, 0, NULL FROM sales_order so
 WHERE so.so_number = 'SO-2026-0005' AND NOT EXISTS (SELECT 1 FROM sales_order_line l WHERE l.so_number = so.so_number);
 
-INSERT INTO sales_order_line (so_number, line_no, sku, name_snapshot, unit_price_snapshot, quantity, reserved_quantity, fulfillment_source, from_warehouse_code)
-SELECT so.so_number, 1, 'WSH-FLU-2L', '워셔액 2L', 4500, 30, 0, NULL, NULL FROM sales_order so
+INSERT INTO sales_order_line (so_number, line_no, sku, name_snapshot, unit_price_snapshot, quantity, reserved_quantity, fulfillment_source)
+SELECT so.so_number, 1, 'WSH-FLU-2L', '워셔액 2L', 4500, 30, 0, NULL FROM sales_order so
 WHERE so.so_number = 'SO-2026-0006' AND NOT EXISTS (SELECT 1 FROM sales_order_line l WHERE l.so_number = so.so_number);
 
 -- =====================================================================
