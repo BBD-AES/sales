@@ -56,6 +56,13 @@ public class SalesOrderPersistenceAdapter implements SalesOrderRepository {
     }
 
     @Override
+    public void lockForUpdate(String soNumber) {
+        // FOR UPDATE 로 행을 잠근다(존재 시 최신 커밋 상태를 잠그며 적재). 반환 엔티티는 버리지만 락은 트랜잭션 끝까지 유지.
+        // 같은 트랜잭션의 후속 load()→findBySoNumber 가 그 잠긴(최신) 행을 읽어 도메인으로 반환한다(신선도는 FOR UPDATE 가 보장).
+        jpaRepository.findBySoNumberForUpdate(soNumber);
+    }
+
+    @Override
     public SalesOrderPage search(SalesOrderSearchCriteria criteria, int page, int size) {
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 20 : size;

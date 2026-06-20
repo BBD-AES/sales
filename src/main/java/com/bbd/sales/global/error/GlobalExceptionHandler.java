@@ -5,6 +5,7 @@ import com.bbd.sales.domain.SalesOrderStateException;
 import com.bbd.sales.global.error.dto.ErrorCode;
 import jakarta.validation.ConstraintViolationException;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.*;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -70,6 +71,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         body.setTitle("BAD_REQUEST");
         body.setDetail(e.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    /**
+     * #55 P1: 비관락 획득 실패(lock_timeout 초과/데드락 등) → 409 CONFLICT.
+     * 동시 처리 충돌이므로 500 대신 '재시도 가능한 충돌'로 노출한다(CannotAcquireLockException 등 하위 포함).
+     */
+    @ExceptionHandler(PessimisticLockingFailureException.class)
+    public ResponseEntity<ProblemDetail> handlePessimisticLock(PessimisticLockingFailureException e) {
+        ProblemDetail body = ProblemDetail.forStatus(HttpStatus.CONFLICT);
+        body.setTitle("CONFLICT");
+        body.setDetail("다른 처리와 동시 충돌로 일시적으로 실패했습니다. 잠시 후 다시 시도해 주세요.");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
 
     @Override
