@@ -70,6 +70,13 @@ public class SalesOrderLine {
         this.fromWarehouseCode = fromWarehouseCode;
     }
 
+    /** 예약 흔적 초기화(withdraw 시). 외부(inventory) 예약 반납과 도메인 상태를 정합시켜 stale 충족파생을 막는다. */
+    public void clearReservation() {
+        this.reservedQuantity = 0;
+        this.fulfillmentSource = null;
+        this.fromWarehouseCode = null;
+    }
+
     public boolean fullyReserved() { return reservedQuantity >= quantity; }
     public int shortfall() { return quantity - reservedQuantity; }
 

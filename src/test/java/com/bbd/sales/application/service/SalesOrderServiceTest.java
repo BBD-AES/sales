@@ -178,6 +178,20 @@ class SalesOrderServiceTest {
     }
 
     @Test
+    @DisplayName("reserveLine: 예약 불가 상태면 inventory 예약 호출 안 함(고아 홀드 방지)")
+    void reserveLine_invalidState_noInventoryCall() {
+        SalesOrder requested = requestedOrder("OIL-FLT-001", 10); // REQUESTED → 예약 불가
+        when(currentUserProvider.current()).thenReturn(HQ);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(requested));
+
+        assertThatThrownBy(() -> service.reserveLine(
+                new ReserveLineCommand("SO-1", "OIL-FLT-001", "WH-HQ-001", 10, "req-x")))
+                .isInstanceOf(SalesOrderStateException.class);
+
+        verify(inventoryPort, never()).reserveFromWarehouse(any(), any(), any(), any(), anyInt());
+    }
+
+    @Test
     @DisplayName("fulfillBackorder: 보충분까지 예약돼 전 라인 full이면 IN_FULFILLMENT")
     void fulfillBackorder_reserved_inFulfillment() {
         SalesOrder so = submitted("RLY-12V-30A-01", 5);

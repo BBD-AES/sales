@@ -171,6 +171,7 @@ public class SalesOrder {
             throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_WITHDRAWABLE);
         }
         this.status = SalesOrderStatus.REQUESTED;
+        this.lines.forEach(SalesOrderLine::clearReservation); // 외부 예약 반납(release)과 정합 — stale 예약으로 재제출→confirm 시 오충족 방지
         // TODO(audit): withdrawnBy/At 컬럼은 submit 감사 컬럼과 함께 별도 커밋.
     }
 
@@ -195,6 +196,13 @@ public class SalesOrder {
         SalesOrderLine line = findUniqueLineBySku(sku);             // 기존 헬퍼 재사용(없는/모호한 sku 예외)
         line.applyReservation(reservedDelta, sourceWarehouseCode);  // 누적(+=) + quantity 상한 캡(기존 로직)
         // ★ deriveStatus() 호출 안 함 → 상태 그대로 유지(예약은 전이가 아님)
+    }
+
+    /** 예약 가능 여부만 '부작용 없이' 선검증(상태 + sku 유일성). 서비스가 외부(inventory) 예약 호출 전에 불러 고아 홀드를 막는다. */
+    public void assertReservable(String sku) {
+        if (!(status.canHqDecide() || status.isBackordered()))
+            throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_DECIDABLE);
+        findUniqueLineBySku(sku); // 없거나 중복이면 throw(적용은 안 함)
     }
 
     /**

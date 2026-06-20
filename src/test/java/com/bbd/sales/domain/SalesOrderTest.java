@@ -175,6 +175,39 @@ class SalesOrderTest {
                 .hasMessageContaining("모호");
     }
 
+    @Test
+    @DisplayName("assertReservable: 비-SUBMITTED/BACKORDERED 또는 미존재 sku면 부작용 없이 throw")
+    void assertReservable_guards() {
+        assertViolation(() -> requested().assertReservable("SKU-1"), Violation.NOT_DECIDABLE); // 상태 가드
+        assertThatThrownBy(() -> submitted().assertReservable("SKU-X"))                        // sku 가드
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("주문 라인에 없는 sku");
+    }
+
+    // ---------- 회수 (withdraw) ----------
+
+    @Test
+    @DisplayName("withdraw: SUBMITTED -> REQUESTED, 라인 예약흔적 초기화(외부 release와 정합)")
+    void withdraw_clearsLineReservation() {
+        SalesOrder so = submitted();
+        so.reserveLine("SKU-1", 3, "WH-HQ-001"); // 전량 예약
+        so.withdraw(NOW);
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.REQUESTED);
+        assertThat(line(so).reservedQuantity()).isZero();
+        assertThat(line(so).fulfillmentSource()).isNull();
+    }
+
+    @Test
+    @DisplayName("withdraw 후 재제출→confirm 은 stale 예약으로 IN_FULFILLMENT 오파생하지 않는다(BACKORDERED)")
+    void withdraw_thenResubmitConfirm_notStaleFulfillment() {
+        SalesOrder so = submitted();
+        so.reserveLine("SKU-1", 3, "WH-HQ-001"); // full
+        so.withdraw(NOW);                         // REQUESTED + 예약 초기화
+        so.submit(NOW);                           // 다시 SUBMITTED (라인 미예약)
+        so.confirmByHq("EMP-hq", NOW);
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED); // stale 였으면 IN_FULFILLMENT
+    }
+
     // ---------- HQ 확정 (confirmByHq = 이미 잡힌 상태를 확정) ----------
 
     @Test
