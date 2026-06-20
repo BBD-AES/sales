@@ -47,7 +47,7 @@ class OutboxProcurementAdapterTest {
         PurchaseRequested ev = objectMapper.readValue(saved.getPayload(), PurchaseRequested.class);
         assertThat(ev.source()).isEqualTo("sales");
         assertThat(ev.eventType()).isEqualTo("PURCHASE_REQUESTED");
-        assertThat(ev.eventId()).isNotBlank();            // 멱등 키 존재
+        assertThat(ev.eventId()).isEqualTo("PR:SO-2026-000042"); // 랜덤 UUID 아님(결정적 멱등 키)
         assertThat(ev.occurredAt()).endsWith("Z");        // UTC Instant 직렬화
         assertThat(ev.soNumber()).isEqualTo("SO-2026-000042");
         assertThat(ev.warehouseCode()).isEqualTo("WH-BR-1001");

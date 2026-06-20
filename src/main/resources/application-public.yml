@@ -15,6 +15,11 @@ spring:
     username: ${DB_NAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      # #55 P1: 비관락(FOR UPDATE) 대기 상한. Postgres 기본 lock_timeout=0(무한)이라 락 보유가 길어지면 대기
+      #         트랜잭션이 무한 블록 → 커넥션풀 고갈로 번진다. 세션 lock_timeout 으로 상한을 둬 초과 시 빠르게 실패
+      #         (GlobalExceptionHandler 가 PessimisticLockingFailureException → 409 로 매핑). 잠금 대기에만 적용(일반 쿼리 무관).
+      connection-init-sql: SET lock_timeout = '3s'
 
   jpa:
     hibernate:

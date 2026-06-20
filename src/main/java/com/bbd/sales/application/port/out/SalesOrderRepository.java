@@ -18,5 +18,11 @@ public interface SalesOrderRepository {
 
     Optional<SalesOrder> findBySoNumber(String soNumber);
 
+    /**
+     * 외부효과(예약/이동/통지) 동반 전이 진입 시, 해당 주문 행을 비관락(PESSIMISTIC_WRITE)으로 잠근다.
+     * 동시/타임아웃 재시도가 같은 주문에 겹쳐도 외부호출이 직렬화되도록 함(#55 P1). 트랜잭션 내에서 호출해야 한다.
+     */
+    void lockForUpdate(String soNumber);
+
     SalesOrderPage search(SalesOrderSearchCriteria criteria, int page, int size);
 }

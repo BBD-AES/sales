@@ -158,7 +158,10 @@ public class SalesOrderService implements SalesOrderUseCase {
         LocalDateTime now = LocalDateTime.now();
         so.withdraw(now);
         repository.save(so);
-        inventoryPort.release(so.soNumber()); // SUBMITTED 에서 HQ가 잡아둔 예약 반납(신모델=SUBMITTED에서 예약). 멱등.
+        // SUBMITTED 에서 HQ가 잡아둔 예약 반납(신모델=SUBMITTED에서 예약).
+        // #55: withdraw/cancel/reject 의 release 는 '멱등 수렴'(같은 soNumber 재release=no-op)이라 reserveLine 과 달리
+        //      비관락 없이도 이중효과가 없다 → 이 외부효과 전이들은 의도적으로 lockForUpdate 를 생략한다.
+        inventoryPort.release(so.soNumber());
         return statusChange(so, currentUser.employeeNumber(), now, null);
     }
 
@@ -174,6 +177,11 @@ public class SalesOrderService implements SalesOrderUseCase {
     @Override
     public SalesOrderResult reserveLine(ReserveLineCommand cmd) {
         CurrentUser user = currentUserProvider.current();
+        // #55: reserveLine 은 의도적으로 비관락을 걸지 않는다.
+        //  - reserveFromWarehouse 는 커밋 전 '외부 REST' 호출이라, 락을 잡은 채 호출하면 inventory 지연/행 동안
+        //    행 락이 유지돼 같은 SO 의 모든 전이를 봉쇄(가용성/커넥션풀 위험)한다 — 락-중-네트워크IO 안티패턴.
+        //  - 게다가 락은 '동시'만 직렬화할 뿐 '같은 requestId 재시도'의 이중계상은 못 막는다(그건 영속 dedup 몫).
+        //  → 동시/재시도 이중예약 방어는 inventory requestId 멱등키(영속 dedup)=#55 2순위(멀티창고와 함께)로 처리한다.
         SalesOrder so = load(cmd.soNumber());
         authorizeDecision(user);
         // 0) 외부 예약 호출 전에 도메인 선검증(상태/SKU) → 예약 성공 후 도메인 throw로 inventory 고아 홀드가 남는 것 방지.
@@ -201,8 +209,9 @@ public class SalesOrderService implements SalesOrderUseCase {
     @Override
     public SalesOrderStatusChangeResult approve(String soNumber) {
         CurrentUser user = currentUserProvider.current();
+        authorizeDecision(user); // 역할 인가를 락 획득 전에 — 비인가 호출이 행 락을 잡아 정상 전이를 막는 것 방지(CodeRabbit #55)
+        repository.lockForUpdate(soNumber); // #55 P1: 확정+구매통지(아웃박스) 동시 진입 직렬화(낙관락 보강, 깔끔한 충돌 의미)
         SalesOrder so = load(soNumber);
-        authorizeDecision(user);
         so.confirmByHq(user.employeeNumber(), LocalDateTime.now());   // reserveAndRoute 호출 없음!
         repository.save(so);
         // 부족분 남으면(BACKORDERED) procurement에 통지(기존 이벤트 그대로)
@@ -217,8 +226,9 @@ public class SalesOrderService implements SalesOrderUseCase {
     @Override
     public SalesOrderStatusChangeResult fulfillBackorder(String soNumber) {
         CurrentUser user = currentUserProvider.current();
+        authorizeDecision(user); // 역할 인가를 락 획득 전에(CodeRabbit #55)
+        repository.lockForUpdate(soNumber); // #55 P1: 백오더 재확정 동시 진입 직렬화
         SalesOrder so = load(soNumber);
-        authorizeDecision(user);
         LocalDateTime now = LocalDateTime.now();
         so.refulfill(now);
         repository.save(so);
@@ -250,8 +260,11 @@ public class SalesOrderService implements SalesOrderUseCase {
     @Override
     public SalesOrderStatusChangeResult receive(String soNumber) {
         CurrentUser currentUser = currentUserProvider.current();
-        SalesOrder so = load(soNumber);
-        authorizeOwnerWrite(so, currentUser);
+        // 소유권 인가는 SO가 필요 → 비잠금 선로드로 먼저 검사(소유 필드는 불변이라 비잠금 읽기로 충분).
+        // 비인가(타지점)는 락을 잡기 전에 차단 — 락-증폭 방지(CodeRabbit #55).
+        authorizeOwnerWrite(load(soNumber), currentUser);
+        repository.lockForUpdate(soNumber); // #55 P1: 인가 통과 후 행 잠금(수령=출고이벤트 발행 동시 진입 직렬화 — on-hand 이중차감 창 축소)
+        SalesOrder so = load(soNumber);     // 잠긴 최신 행으로 재적재 — 전이 검증/저장은 이 인스턴스로(스테일 이중적용 방지)
 
         so.receive(currentUser.employeeNumber(), LocalDateTime.now()); // APPROVED 검증은 도메인이
         repository.save(so);

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -31,6 +32,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -136,13 +138,13 @@ class SalesOrderServiceTest {
     @Test
     @DisplayName("approve: HQ 권한 아니면 거부, 구매요청 안 함")
     void approve_nonHqRole_forbidden() {
-        SalesOrder so = submitted("OIL-FLT-001", 10);
         when(currentUserProvider.current()).thenReturn(STAFF);
-        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
         assertThatThrownBy(() -> service.approve("SO-1"))
                 .isInstanceOf(ApiException.class);
 
+        // 역할 인가가 락/로드 전에 차단 → repository 미접근(특히 락 미획득). CodeRabbit #55.
+        verify(repository, never()).lockForUpdate(any());
         verify(procurementPort, never()).requestPurchase(any(), any(), anyList());
     }
 
@@ -296,6 +298,37 @@ class SalesOrderServiceTest {
                 .isInstanceOf(RuntimeException.class);
     }
 
+    // === #55 P1: 락 우선 불변식(외부효과 전에 lockForUpdate) ===
+    @Test
+    @DisplayName("approve: lockForUpdate 가 외부 구매통지(requestPurchase)보다 먼저 호출된다(#55 P1)")
+    void approve_locksBeforeExternalPurchase() {
+        SalesOrder so = submitted("RLY-12V-30A-01", 5); // 예약 0 → 확정 시 부족분 PR 발생
+        when(currentUserProvider.current()).thenReturn(HQ);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+
+        service.approve("SO-1");
+
+        InOrder ordered = inOrder(repository, procurementPort);
+        ordered.verify(repository).lockForUpdate("SO-1");                                 // 락 먼저
+        ordered.verify(procurementPort).requestPurchase(eq("SO-1"), any(), anyList());    // 외부효과 나중
+    }
+
+    @Test
+    @DisplayName("receive: lockForUpdate 가 출고이벤트 발행(publishReceived)보다 먼저 호출된다(#55 P1)")
+    void receive_locksBeforePublish() {
+        SalesOrder so = submitted("OIL-FLT-001", 10);
+        so.reserveLine("OIL-FLT-001", 10);
+        so.confirmByHq("HQ001", NOW); // → IN_FULFILLMENT
+        when(currentUserProvider.current()).thenReturn(STAFF);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+
+        service.receive("SO-1");
+
+        InOrder ordered = inOrder(repository, eventPublisher);
+        ordered.verify(repository).lockForUpdate("SO-1");
+        ordered.verify(eventPublisher).publishReceived("SO-1");
+    }
+
     // === 읽기 스코핑 ===
     @Test
     @DisplayName("search: 지점은 본인 창고(이름)로 강제, 전달한 코드필터 무시")
@@ -427,6 +460,7 @@ class SalesOrderServiceTest {
         assertThatThrownBy(() -> service.receive("SO-1"))
                 .isInstanceOf(ApiException.class);
         verify(eventPublisher, never()).publishReceived(any());
+        verify(repository, never()).lockForUpdate(any()); // 소유권 인가 실패 → 락 미획득(인가가 락 전). CodeRabbit #55.
     }
 
     // ===== 생성 소유권 (Step 3) =====
