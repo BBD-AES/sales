@@ -208,6 +208,20 @@ class SalesOrderServiceTest {
     }
 
     @Test
+    @DisplayName("reserveLine: 비양수 수량은 로컬 거부 + inventory 호출 안 함")
+    void reserveLine_nonPositiveQuantity_rejected() {
+        SalesOrder so = submitted("OIL-FLT-001", 10);
+        when(currentUserProvider.current()).thenReturn(HQ);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+
+        assertThatThrownBy(() -> service.reserveLine(
+                new ReserveLineCommand("SO-1", "OIL-FLT-001", "WH-HQ-001", 0, "req-0")))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verify(inventoryPort, never()).reserveFromWarehouse(any(), any(), any(), any(), anyInt());
+    }
+
+    @Test
     @DisplayName("reserveLine: 이미 충족된 라인은 거부 + inventory 호출 안 함")
     void reserveLine_fullyReserved_rejects() {
         SalesOrder so = submitted("OIL-FLT-001", 10);

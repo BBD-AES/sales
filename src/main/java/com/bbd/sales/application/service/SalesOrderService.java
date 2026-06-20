@@ -178,6 +178,9 @@ public class SalesOrderService implements SalesOrderUseCase {
         authorizeDecision(user);
         // 0) 외부 예약 호출 전에 도메인 선검증(상태/SKU) → 예약 성공 후 도메인 throw로 inventory 고아 홀드가 남는 것 방지.
         so.assertReservable(cmd.sku());
+        if (cmd.quantity() <= 0) {   // 비양수 수량 로컬 차단(@Positive 웹검증 외 서비스 경계 방어) → inventory에 0/음수 미전달
+            throw new IllegalArgumentException("예약 수량은 1 이상이어야 합니다: " + cmd.quantity());
+        }
         // 1) 요청을 미충족분(shortfall)으로 clamp — 필요수량 초과 예약(inventory 고아 holds) 방지. 이미 충족이면 거부.
         int shortfall = so.shortfallFor(cmd.sku());
         if (shortfall <= 0) {
