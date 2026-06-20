@@ -62,7 +62,7 @@ public class InventoryRestAdapter implements InventoryPort {
                 new ReserveRequest(requestId, soNumber, sku, warehouseCode, quantity));
         // r.reserved()       = 실제 잡힌 양
         // r.remainingRequested() = 못 잡은 분(>0 이면 사람이 다른 창고로 또 예약)
-        return new ReservationResult(sku, r.requested(), r.reserved(), warehouseCode);
+        return new ReservationResult(sku, r.requested(), r.reserved());
     }
 
     /**

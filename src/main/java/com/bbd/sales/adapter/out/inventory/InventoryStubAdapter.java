@@ -46,7 +46,7 @@ public class InventoryStubAdapter implements InventoryPort {
         int reserved = Math.min(quantity, available);
         log.info("[InventoryStub] 예약(데모) req={}, so={}, sku={}, wh={}, 요청={}, 잡힘={}",
                 requestId, soNumber, sku, warehouseCode, quantity, reserved);
-        return new ReservationResult(sku, quantity, reserved, warehouseCode);
+        return new ReservationResult(sku, quantity, reserved);
     }
 
     @Override

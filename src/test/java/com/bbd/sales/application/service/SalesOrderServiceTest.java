@@ -169,7 +169,7 @@ class SalesOrderServiceTest {
         when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
         when(inventoryPort.reserveFromWarehouse("req-1", "SO-1", "OIL-FLT-001", "WH-HQ-001", 10))
-                .thenReturn(new ReservationResult("OIL-FLT-001", 10, 7, "WH-HQ-001")); // 7만 잡힘
+                .thenReturn(new ReservationResult("OIL-FLT-001", 10, 7)); // 7만 잡힘
 
         service.reserveLine(new ReserveLineCommand("SO-1", "OIL-FLT-001", "WH-HQ-001", 10, "req-1"));
 
@@ -199,7 +199,7 @@ class SalesOrderServiceTest {
         when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
         when(inventoryPort.reserveFromWarehouse("req-2", "SO-1", "OIL-FLT-001", "WH-HQ-002", 2)) // 10 요청해도 2만
-                .thenReturn(new ReservationResult("OIL-FLT-001", 2, 2, "WH-HQ-002"));
+                .thenReturn(new ReservationResult("OIL-FLT-001", 2, 2));
 
         service.reserveLine(new ReserveLineCommand("SO-1", "OIL-FLT-001", "WH-HQ-002", 10, "req-2"));
 
