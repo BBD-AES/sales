@@ -14,7 +14,6 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * 조달(PO) 아웃바운드 어댑터 — 구매요청(PR)을 Transactional Outbox에 적재해 {@code sales.purchase-requested}로 발행.
@@ -37,7 +36,9 @@ public class OutboxProcurementAdapter implements ProcurementPort {
 
     @Override
     public void requestPurchase(String soNumber, String destinationWarehouseCode, List<StockTransferLine> lines) {
-        String eventId = UUID.randomUUID().toString();
+        // #55 CS-4: eventId 를 결정적 키로(주문당 PR 1건). 호출별 랜덤 UUID 였을 때는 재발행/재시도가
+        //           컨슈머에 서로 다른 eventId 로 보여 PO 중복(=돈) 위험. soNumber 앵커로 멱등 보장.
+        String eventId = "PR:" + soNumber;
         List<PurchaseRequested.Line> eventLines = lines.stream()
                 .map(l -> new PurchaseRequested.Line(l.sku(), l.quantity()))
                 .toList();
