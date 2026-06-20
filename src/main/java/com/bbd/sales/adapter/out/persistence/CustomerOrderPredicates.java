@@ -4,6 +4,8 @@ import com.bbd.sales.application.port.out.CustomerOrderSearchCriteria;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Predicate;   // ★ JPA Criteria 아님. BooleanBuilder 가 구현하는 QueryDSL Predicate
 
+import static org.springframework.util.StringUtils.hasText;
+
 
 public class CustomerOrderPredicates {
     public CustomerOrderPredicates() {
@@ -17,9 +19,10 @@ public class CustomerOrderPredicates {
         QCustomerOrderJpaEntity co = QCustomerOrderJpaEntity.customerOrderJpaEntity;
         BooleanBuilder where = new BooleanBuilder();
         if (c.status() != null) where.and(co.status.eq(c.status()));
-        if (c.dealerWarehouseCode() != null) where.and(co.dealerWarehouseCode.eq(c.dealerWarehouseCode()));
-        if (c.customerName() != null) where.and(co.customerName.containsIgnoreCase(c.customerName()));
-        if (c.requestedBy() != null) where.and(co.requestedBy.eq(c.requestedBy()));
+        if (hasText(c.dealerWarehouseCode())) where.and(co.dealerWarehouseCode.eq(c.dealerWarehouseCode())); // HQ 코드 필터
+        if (hasText(c.dealerName())) where.and(co.dealerName.eq(c.dealerName()));                            // 지점 본인지점 강제(이름축)
+        if (hasText(c.customerName())) where.and(co.customerName.containsIgnoreCase(c.customerName()));
+        if (hasText(c.requestedBy())) where.and(co.requestedBy.eq(c.requestedBy())); // 빈문자열(=)은 미적용(eq("") 방지)
         if (c.from() != null) where.and(co.requestedAt.goe(c.from()));
         if (c.to() != null) where.and(co.requestedAt.loe(c.to()));
         return where;

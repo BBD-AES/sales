@@ -175,5 +175,5 @@
 **6-1. 바코드 = SKU 가정** ℹ️
 item은 SKU 조회만, 바코드 전용 필드·조회 없음. **스캔한 바코드 페이로드를 SKU로 직접 사용**한다는 전제로 설계. 물리 바코드가 SKU와 다른 체계면 매핑 테이블 필요 → 확인.
 
-**6-2. 마이페이지 조회가 internal-snapshot뿐** ℹ️
-`GET /users/internal/snapshot`은 keycloakSub 파라미터 + 본인 일치 검사를 요구하는 내부용. 깔끔한 `GET /me`는 없음 — JWT의 sub를 그대로 넣어 사용 가능하나 user팀에 모바일용 self 엔드포인트 요청 고려.
+**6-2. 마이페이지 조회가 internal-snapshot뿐** ℹ️ → user팀 요청 발행
+`GET /api/auth/me`는 모바일(Bearer)에서 동작 안 하고 role·tenancy도 없음. ERP 프로필을 다 주는 건 `GET /users/internal/snapshot?keycloakSub=`(internal 전용·파라미터 방식)뿐. → **user팀에 `GET /api/v1/users/me` 신설 요청 작성**([user-me-endpoint-request.md](./user-me-endpoint-request.md)). 임시로는 토큰 sub로 internal/snapshot 호출(self-match로 안전).

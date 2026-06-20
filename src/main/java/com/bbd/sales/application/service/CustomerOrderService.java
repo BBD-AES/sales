@@ -34,19 +34,36 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     @Override
     @Transactional(readOnly = true)
     public SalesOrderPageResult<CustomerOrderSummaryResult> search(SearchCustomerOrderQuery query) {
-        String dealerScope = query.dealerWarehouseCode(); // 딜러 필터
-//        if (!query.currentUser().isHq()) {
-//            String wc = query.currentUser().warehouseCode();
-//            // HQ 아닌데 창고코드 없으면 차단함
-//            if (wc == null || wc.isBlank()) {
-//                throw new ApiException(ErrorCode.AUTH_HEADER_REQUIRED);
-//            }
-//            dealerScope = wc; // 볼 수 있는 지점을 본인 지점으로 강제함
-//        }
+        CurrentUser user = currentUserProvider.current();
+        // 본사(HQ/ADMIN): 전달된 딜러 코드 필터 그대로. 지점: 본인지점(이름축)으로 강제, 전달된 코드 필터는 무시(타지점 열람 차단).
+        //
+        // [테넌시 스코핑이 '이름(tenancyName)축'인 이유 — "코드축이 더 안전"하다는 리뷰(#54) 지적 검토 결과]
+        //  코드축이 개명/동명에 견고한 건 맞으나, sales 단독으로 코드축 전환은 불가능하다:
+        //   · 인증 신원(user-service 스냅샷 → security-core → CurrentUser)은 tenancyType+tenancyName 만 제공하고,
+        //     지점 '코드' 클레임이 org 전역(UserSnapshotResponse·JWT)에 존재하지 않는다 → 비교할 코드가 신원에 없음.
+        //   · sales 가 저장하는 dealerWarehouseCode 는 '생성요청 body' 값이라 인가축(현재 사용자 소속)으로는 쓸 수 없다.
+        //   ⇒ 코드축 전환은 user-service 가 tenancyCode 를 스냅샷/토큰에 추가하는 'org 계약 변경'이 선행돼야 한다
+        //     (그 뒤 CustomerOrder·SalesOrder 가 함께 name→code 이전). 단일 서비스 수정으로 못 닫는다.
+        //  [이 설계의 안전 전제 — user-service 거버넌스 책임] tenancyName 은 '유일 + 불변(canonical)'이어야 한다.
+        //   이름 중복이면 타지점 열람 누수, 개명이면 과거주문(dealerName 스냅샷) 접근 상실. 전제가 깨지면 위 계약변경이 필요.
+        String codeFilter; // HQ 선택 필터(코드축)
+        String nameScope;  // 지점 강제 스코핑(이름축 = dealerName)
+        if (user.isHq()) {
+            codeFilter = query.dealerWarehouseCode();
+            nameScope = null;
+        } else {
+            String warehouseName = user.warehouseName();
+            if (warehouseName == null || warehouseName.isBlank()) {
+                // 정상 경로에선 resolver 가 BRANCH 의 지점명을 항상 채움. 방어용(인증 컨텍스트 불완전).
+                throw new ApiException(ErrorCode.AUTH_HEADER_REQUIRED);
+            }
+            codeFilter = null;        // 지점이 넘긴 코드 필터 무시 → 타지점 열람 차단
+            nameScope = warehouseName;
+        }
         LocalDateTime from = query.startDate() != null ? query.startDate().atStartOfDay() : null; // 날짜 경계 변환
         LocalDateTime to = query.endDate() != null ? query.endDate().atTime(LocalTime.MAX) : null;
         CustomerOrderSearchCriteria criteria = new CustomerOrderSearchCriteria( // 권한 반영된 '순수 필터'로 변환
-                query.status(), dealerScope, query.customerName(), query.requestedBy(), from, to
+                query.status(), codeFilter, nameScope, query.customerName(), query.requestedBy(), from, to
         );
         CustomerOrderPage page = repository.search(criteria, query.page(), query.size()); // 쿼리 방식(QueryDSL/Specification인지, JPQL/nativeSQL인지 등등)을 모르는 포트로 위임
         List<CustomerOrderSummaryResult> items = page.content().stream().map(this::toSummary).toList(); // 도메인 -> Result 변환
@@ -130,7 +147,7 @@ public class CustomerOrderService implements CustomerOrderUseCase {
                 new ApiException(ErrorCode.CUSTOMER_ORDER_NOT_FOUND));
     }
 
-    // 조회 권한: HQ는 전체, 지점은 본인 것만
+    // 조회 권한: HQ는 전체, 지점은 본인 것만 (이름축 — 근거/안전전제는 search() 의 [테넌시 스코핑] 주석 참조)
     private void authorizeRead(CustomerOrder co, CurrentUser u) {
         if (u.isHq()) return; // 본사(ADMIN/HQ_*)는 전 지점 조회
         if (!co.ownedByWarehouseName(u.warehouseName())) {
