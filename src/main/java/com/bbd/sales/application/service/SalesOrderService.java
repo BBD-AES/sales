@@ -189,7 +189,7 @@ public class SalesOrderService implements SalesOrderUseCase {
                 cmd.requestId(), so.soNumber(), cmd.sku(), cmd.warehouseCode(), want);
         // 3) 실제 잡힌 양만 도메인 라인에 누적(상태 그대로 SUBMITTED).
         //    (주의) 같은 requestId 재요청 시 inventory 멱등 반환을 sales가 또 누적하는 이중계상은 #55(requestId 영속 dedup)로 분리.
-        so.reserveLine(cmd.sku(), rr.reserved(), cmd.warehouseCode());
+        so.reserveLine(cmd.sku(), rr.reserved());
         repository.save(so);
         return toResult(so);   // 응답에 라인별 reservedQuantity/부족분 → 사람이 보고 또 예약
     }
@@ -338,7 +338,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         List<SalesOrderLineResult> lines = so.lines().stream()
                 .map(l -> new SalesOrderLineResult(
                         l.lineNo(), l.sku(), l.nameSnapshot(), l.unitPriceSnapshot(), l.quantity(),
-                        l.reservedQuantity(), l.fulfillmentSource(), l.fromWarehouseCode()))
+                        l.reservedQuantity(), l.fulfillmentSource()))
                 .toList();
         return new SalesOrderResult(
                 so.soNumber(),

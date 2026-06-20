@@ -53,7 +53,7 @@ class SalesOrderTest {
     /** 전량 예약 후 확정 -> IN_FULFILLMENT */
     private SalesOrder inFulfillment() {
         SalesOrder so = submitted();
-        so.reserveLine("SKU-1", 3, "WH-HQ-001"); // 전량 예약(SUBMITTED 유지)
+        so.reserveLine("SKU-1", 3); // 전량 예약(SUBMITTED 유지)
         so.confirmByHq("EMP-hq", NOW);
         return so;
     }
@@ -144,8 +144,8 @@ class SalesOrderTest {
     @DisplayName("reserveLine: 예약분 누적(+=), 상태는 그대로(SUBMITTED) — 예약은 전이가 아님")
     void reserveLine_accumulates_noTransition() {
         SalesOrder so = submitted();
-        so.reserveLine("SKU-1", 1, "WH-HQ-001");
-        so.reserveLine("SKU-1", 2, "WH-HQ-002"); // 누적 -> 3 (full)
+        so.reserveLine("SKU-1", 1);
+        so.reserveLine("SKU-1", 2); // 누적 -> 3 (full)
         assertThat(line(so).reservedQuantity()).isEqualTo(3);
         assertThat(so.status()).isEqualTo(SalesOrderStatus.SUBMITTED);
     }
@@ -154,7 +154,7 @@ class SalesOrderTest {
     @DisplayName("reserveLine: 주문 라인에 없는 sku면 거부")
     void reserveLine_unknownSku_fails() {
         SalesOrder so = submitted();
-        assertThatThrownBy(() -> so.reserveLine("SKU-X", 1, "WH-HQ-001"))
+        assertThatThrownBy(() -> so.reserveLine("SKU-X", 1))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("주문 라인에 없는 sku");
     }
@@ -163,14 +163,14 @@ class SalesOrderTest {
     @DisplayName("reserveLine: REQUESTED 에서는 거부(NOT_DECIDABLE)")
     void reserveLine_fromRequested_fails() {
         SalesOrder so = requested();
-        assertViolation(() -> so.reserveLine("SKU-1", 1, "WH-HQ-001"), Violation.NOT_DECIDABLE);
+        assertViolation(() -> so.reserveLine("SKU-1", 1), Violation.NOT_DECIDABLE);
     }
 
     @Test
     @DisplayName("reserveLine: 복원된 주문에 같은 sku 라인이 여러 개면 매핑이 모호하므로 거부")
     void reserveLine_legacyDuplicateSkuLines_fails() {
         SalesOrder so = submittedWithLegacyDuplicateSkuLines();
-        assertThatThrownBy(() -> so.reserveLine("SKU-1", 1, "WH-HQ-001"))
+        assertThatThrownBy(() -> so.reserveLine("SKU-1", 1))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("모호");
     }
@@ -179,7 +179,7 @@ class SalesOrderTest {
     @DisplayName("reserveLine: 음수 예약량은 거부(IllegalArgumentException)")
     void reserveLine_negativeDelta_throws() {
         SalesOrder so = submitted();
-        assertThatThrownBy(() -> so.reserveLine("SKU-1", -1, "WH-HQ-001"))
+        assertThatThrownBy(() -> so.reserveLine("SKU-1", -1))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("음수");
     }
@@ -188,7 +188,7 @@ class SalesOrderTest {
     @DisplayName("reserveLine: 예약 중엔 fulfillmentSource 미확정(null), 확정(confirm) 시 파생")
     void reserveLine_sourceUndecidedUntilConfirm() {
         SalesOrder so = submitted();
-        so.reserveLine("SKU-1", 1, "WH-HQ-001"); // 부분 예약
+        so.reserveLine("SKU-1", 1); // 부분 예약
         assertThat(line(so).fulfillmentSource()).isNull();           // 아직 미확정
         so.confirmByHq("EMP-hq", NOW);
         assertThat(line(so).fulfillmentSource()).isEqualTo(FulfillmentSource.BACKORDERED); // 확정 시 파생
@@ -209,7 +209,7 @@ class SalesOrderTest {
     @DisplayName("withdraw: SUBMITTED -> REQUESTED, 라인 예약흔적 초기화(외부 release와 정합)")
     void withdraw_clearsLineReservation() {
         SalesOrder so = submitted();
-        so.reserveLine("SKU-1", 3, "WH-HQ-001"); // 전량 예약
+        so.reserveLine("SKU-1", 3); // 전량 예약
         so.withdraw(NOW);
         assertThat(so.status()).isEqualTo(SalesOrderStatus.REQUESTED);
         assertThat(line(so).reservedQuantity()).isZero();
@@ -220,7 +220,7 @@ class SalesOrderTest {
     @DisplayName("withdraw 후 재제출→confirm 은 stale 예약으로 IN_FULFILLMENT 오파생하지 않는다(BACKORDERED)")
     void withdraw_thenResubmitConfirm_notStaleFulfillment() {
         SalesOrder so = submitted();
-        so.reserveLine("SKU-1", 3, "WH-HQ-001"); // full
+        so.reserveLine("SKU-1", 3); // full
         so.withdraw(NOW);                         // REQUESTED + 예약 초기화
         so.submit(NOW);                           // 다시 SUBMITTED (라인 미예약)
         so.confirmByHq("EMP-hq", NOW);
@@ -233,7 +233,7 @@ class SalesOrderTest {
     @DisplayName("confirmByHq: 전량 예약된 상태 확정 -> IN_FULFILLMENT, 라인 full+STOCK, 승인자 기록")
     void confirmByHq_allReserved_inFulfillment() {
         SalesOrder so = submitted();
-        so.reserveLine("SKU-1", 3, "WH-HQ-001"); // 사전 전량 예약
+        so.reserveLine("SKU-1", 3); // 사전 전량 예약
         so.confirmByHq("EMP-hq", NOW);
         assertThat(so.status()).isEqualTo(SalesOrderStatus.IN_FULFILLMENT);
         assertThat(so.approvedBy()).isEqualTo("EMP-hq");
@@ -245,7 +245,7 @@ class SalesOrderTest {
     @DisplayName("confirmByHq: 부족분 남은 채 확정 -> BACKORDERED, 부족분 소스 기록")
     void confirmByHq_shortfall_backordered() {
         SalesOrder so = submitted();
-        so.reserveLine("SKU-1", 1, "WH-HQ-001"); // 부분(부족 2)
+        so.reserveLine("SKU-1", 1); // 부분(부족 2)
         so.confirmByHq("EMP-hq", NOW);
         assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED);
         assertThat(line(so).reservedQuantity()).isEqualTo(1);
@@ -265,7 +265,7 @@ class SalesOrderTest {
     @DisplayName("refulfill: 보충분까지 예약돼 잔여 0이면 IN_FULFILLMENT")
     void refulfill_allReserved_inFulfillment() {
         SalesOrder so = backordered();           // reserved=0, BACKORDERED
-        so.reserveLine("SKU-1", 3, "WH-HQ-001"); // 보충분 마저(BACKORDERED 에서)
+        so.reserveLine("SKU-1", 3); // 보충분 마저(BACKORDERED 에서)
         so.refulfill(NOW);
         assertThat(so.status()).isEqualTo(SalesOrderStatus.IN_FULFILLMENT);
         assertThat(line(so).fullyReserved()).isTrue();
@@ -275,7 +275,7 @@ class SalesOrderTest {
     @DisplayName("refulfill: 여전히 부족하면 BACKORDERED 유지")
     void refulfill_stillShort_staysBackordered() {
         SalesOrder so = backordered();           // reserved=0, qty 3
-        so.reserveLine("SKU-1", 2, "WH-HQ-001"); // 2만 보충(부족 1)
+        so.reserveLine("SKU-1", 2); // 2만 보충(부족 1)
         so.refulfill(NOW);
         assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED);
         assertThat(line(so).reservedQuantity()).isEqualTo(2);
@@ -367,7 +367,7 @@ class SalesOrderTest {
     void happyPath() {
         SalesOrder so = requested();
         so.submit(NOW);
-        so.reserveLine("SKU-1", 3, "WH-HQ-001");
+        so.reserveLine("SKU-1", 3);
         so.confirmByHq("EMP-hq", NOW);
         so.receive("EMP-staff", NOW);
         assertThat(so.status()).isEqualTo(SalesOrderStatus.RECEIVED);

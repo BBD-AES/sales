@@ -92,7 +92,7 @@ class SalesOrderServiceTest {
     @DisplayName("approve: 사전 전량 예약된 상태 확정 -> IN_FULFILLMENT, 구매요청 없음")
     void approve_allReserved_inFulfillment() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
-        so.reserveLine("OIL-FLT-001", 10, "WH-HQ-001"); // 사전 전량 예약(SUBMITTED 유지)
+        so.reserveLine("OIL-FLT-001", 10); // 사전 전량 예약(SUBMITTED 유지)
         when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
@@ -107,7 +107,7 @@ class SalesOrderServiceTest {
     @DisplayName("approve: 부족분 남은 채 확정 -> BACKORDERED + 부족분 구매요청(PR)")
     void approve_shortfall_backordered_requestsPurchase() {
         SalesOrder so = submitted("RLY-12V-30A-01", 5);
-        so.reserveLine("RLY-12V-30A-01", 2, "WH-HQ-001"); // 부분 예약(부족 3)
+        so.reserveLine("RLY-12V-30A-01", 2); // 부분 예약(부족 3)
         when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
@@ -195,7 +195,7 @@ class SalesOrderServiceTest {
     @DisplayName("reserveLine: 요청이 미충족분보다 크면 shortfall 만큼만 inventory에 요청")
     void reserveLine_clampsRequestToShortfall() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
-        so.reserveLine("OIL-FLT-001", 8, "WH-HQ-001"); // 사전 8 예약 → 부족 2
+        so.reserveLine("OIL-FLT-001", 8); // 사전 8 예약 → 부족 2
         when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
         when(inventoryPort.reserveFromWarehouse("req-2", "SO-1", "OIL-FLT-001", "WH-HQ-002", 2)) // 10 요청해도 2만
@@ -211,7 +211,7 @@ class SalesOrderServiceTest {
     @DisplayName("reserveLine: 이미 충족된 라인은 거부 + inventory 호출 안 함")
     void reserveLine_fullyReserved_rejects() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
-        so.reserveLine("OIL-FLT-001", 10, "WH-HQ-001"); // 전량 예약 → 부족 0
+        so.reserveLine("OIL-FLT-001", 10); // 전량 예약 → 부족 0
         when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
@@ -226,9 +226,9 @@ class SalesOrderServiceTest {
     @DisplayName("fulfillBackorder: 보충분까지 예약돼 전 라인 full이면 IN_FULFILLMENT")
     void fulfillBackorder_reserved_inFulfillment() {
         SalesOrder so = submitted("RLY-12V-30A-01", 5);
-        so.reserveLine("RLY-12V-30A-01", 2, "WH-HQ-001"); // 부분
+        so.reserveLine("RLY-12V-30A-01", 2); // 부분
         so.confirmByHq("HQ001", NOW);                      // -> BACKORDERED(부족 3)
-        so.reserveLine("RLY-12V-30A-01", 3, "WH-HQ-002"); // 보충분 마저(BACKORDERED 에서)
+        so.reserveLine("RLY-12V-30A-01", 3); // 보충분 마저(BACKORDERED 에서)
         when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
@@ -241,7 +241,7 @@ class SalesOrderServiceTest {
     @DisplayName("fulfillBackorder: 여전히 부족하면 BACKORDERED 유지")
     void fulfillBackorder_stillShort_staysBackordered() {
         SalesOrder so = submitted("RLY-12V-30A-01", 5);
-        so.reserveLine("RLY-12V-30A-01", 2, "WH-HQ-001");
+        so.reserveLine("RLY-12V-30A-01", 2);
         so.confirmByHq("HQ001", NOW); // -> BACKORDERED, reserved=2
         when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
@@ -256,7 +256,7 @@ class SalesOrderServiceTest {
     @DisplayName("receive: IN_FULFILLMENT -> RECEIVED, sales.order.received 발행")
     void receive_inFulfillment_publishesReceived() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
-        so.reserveLine("OIL-FLT-001", 10, "WH-HQ-001"); // 전량 예약
+        so.reserveLine("OIL-FLT-001", 10); // 전량 예약
         so.confirmByHq("HQ001", NOW);                   // -> IN_FULFILLMENT
         when(currentUserProvider.current()).thenReturn(STAFF);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
@@ -271,7 +271,7 @@ class SalesOrderServiceTest {
     @DisplayName("receive: 이벤트 발행 실패 시 예외 전파(트랜잭션 롤백 → 수령 취소)")
     void receive_publishFails_propagates() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
-        so.reserveLine("OIL-FLT-001", 10, "WH-HQ-001");
+        so.reserveLine("OIL-FLT-001", 10);
         so.confirmByHq("HQ001", NOW);
         when(currentUserProvider.current()).thenReturn(STAFF);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));

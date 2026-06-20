@@ -190,11 +190,11 @@ public class SalesOrder {
      * HQ가 "이 창고에서 N개" 예약할 때마다 호출. 실제 잡힌 양(reservedDelta)을 라인에 누적만 한다.
      * 상태는 그대로 — 확정은 approve(confirmByHq)가, 재확정은 fulfill-backorder(refulfill)가 한다.
      */
-    public void reserveLine(String sku, int reservedDelta, String sourceWarehouseCode) {
+    public void reserveLine(String sku, int reservedDelta) {
         if (!(status.canHqDecide() || status.isBackordered()))      // SUBMITTED 또는 BACKORDERED 에서만
             throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_DECIDABLE);
         SalesOrderLine line = findUniqueLineBySku(sku);             // 기존 헬퍼 재사용(없는/모호한 sku 예외)
-        line.applyReservation(reservedDelta, sourceWarehouseCode);  // 누적(+=) + quantity 상한 캡(기존 로직)
+        line.applyReservation(reservedDelta);                       // 누적(+=) + quantity 상한 캡(기존 로직)
         // ★ deriveStatus() 호출 안 함 → 상태 그대로 유지(예약은 전이가 아님)
     }
 
