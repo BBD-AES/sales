@@ -1,12 +1,16 @@
 package com.bbd.sales.application.port.in;
 
 import com.bbd.sales.application.command.CreateSalesOrderCommand;
+import com.bbd.sales.application.command.ReserveLineCommand;
 import com.bbd.sales.application.command.SearchSalesOrderQuery;
 import com.bbd.sales.application.command.UpdateSalesOrderCommand;
+import com.bbd.sales.application.port.out.WarehouseStock;
 import com.bbd.sales.application.result.SalesOrderPageResult;
 import com.bbd.sales.application.result.SalesOrderResult;
 import com.bbd.sales.application.result.SalesOrderStatusChangeResult;
 import com.bbd.sales.application.result.SalesOrderSummaryResult;
+
+import java.util.List;
 
 /**
  * 인바운드(구동) 포트 = "이 애플리케이션으로 무엇을 할 수 있는가"의 계약.
@@ -22,6 +26,12 @@ public interface SalesOrderUseCase {
     SalesOrderResult get(String soNumber);
 
     SalesOrderResult update(UpdateSalesOrderCommand command);
+
+    /** [수동예약] 가용 조회(예약 화면). HQ가 창고를 고르려고 본다. */
+    List<WarehouseStock> stockAvailability(String soNumber, String sku);
+
+    /** [수동예약] 사람이 고른 한 창고에서 라인 예약(SUBMITTED/BACKORDERED). 상태전이 없음 — 확정은 approve. */
+    SalesOrderResult reserveLine(ReserveLineCommand command);
 
     /** 지점 관리자가 HQ로 제출(REQUESTED -> SUBMITTED). */
     SalesOrderStatusChangeResult submit(String soNumber);

@@ -1,6 +1,7 @@
 package com.bbd.sales.application.service;
 
 import com.bbd.sales.application.command.CreateSalesOrderCommand;
+import com.bbd.sales.application.command.ReserveLineCommand;
 import com.bbd.sales.application.command.SalesOrderLineCommand;
 import com.bbd.sales.application.command.SearchSalesOrderQuery;
 import com.bbd.sales.application.command.UpdateSalesOrderCommand;
@@ -69,7 +70,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         SalesOrderSearchCriteria criteria = new SalesOrderSearchCriteria(
                 query.status(), query.priority(), codeFilter,
                 nameScope,
-                query.requestedBy(), from, to);
+                query.requestedBy(), query.receivedBy(), from, to);
 
         SalesOrderPage page = repository.search(criteria, query.page(), query.size());
         List<SalesOrderSummaryResult> items = page.content().stream().map(this::toSummary).toList();
@@ -153,11 +154,75 @@ public class SalesOrderService implements SalesOrderUseCase {
     public SalesOrderStatusChangeResult withdraw(String soNumber) {
         CurrentUser currentUser = currentUserProvider.current();
         SalesOrder so = load(soNumber);
-        authorizeOwnerWrite(so, currentUser); // 본인 지점 소유(취소와 동일 가드). 외부 호출 0(예약 전 상태).
+        authorizeOwnerWrite(so, currentUser); // 본인 지점 소유(취소와 동일 가드)
         LocalDateTime now = LocalDateTime.now();
         so.withdraw(now);
         repository.save(so);
+        inventoryPort.release(so.soNumber()); // SUBMITTED 에서 HQ가 잡아둔 예약 반납(신모델=SUBMITTED에서 예약). 멱등.
         return statusChange(so, currentUser.employeeNumber(), now, null);
+    }
+
+    /** [가용 조회] 예약 화면용. 권한만 보고 inventory 현황을 그대로 전달. */
+    @Override @Transactional(readOnly = true)
+    public List<WarehouseStock> stockAvailability(String soNumber, String sku) {
+        SalesOrder so = load(soNumber);
+        authorizeDecision(currentUserProvider.current());   // HQ_MANAGER/ADMIN
+        return inventoryPort.availability(sku);
+    }
+
+    /** [라인 예약] 사람이 고른 '한 창고'에서 한 번. inventory에 먼저 잡고(실량 받고) → 도메인에 누적. */
+    @Override
+    public SalesOrderResult reserveLine(ReserveLineCommand cmd) {
+        CurrentUser user = currentUserProvider.current();
+        SalesOrder so = load(cmd.soNumber());
+        authorizeDecision(user);
+        // 0) 외부 예약 호출 전에 도메인 선검증(상태/SKU) → 예약 성공 후 도메인 throw로 inventory 고아 홀드가 남는 것 방지.
+        so.assertReservable(cmd.sku());
+        if (cmd.quantity() <= 0) {   // 비양수 수량 로컬 차단(@Positive 웹검증 외 서비스 경계 방어) → inventory에 0/음수 미전달
+            throw new IllegalArgumentException("예약 수량은 1 이상이어야 합니다: " + cmd.quantity());
+        }
+        // 1) 요청을 미충족분(shortfall)으로 clamp — 필요수량 초과 예약(inventory 고아 holds) 방지. 이미 충족이면 거부.
+        int shortfall = so.shortfallFor(cmd.sku());
+        if (shortfall <= 0) {
+            throw new ApiException(ErrorCode.SALES_ORDER_LINE_FULLY_RESERVED);
+        }
+        int want = Math.min(cmd.quantity(), shortfall);
+        // 2) inventory 예약(동기, 원자) → 실제 잡힌 양. requestId는 프론트가 클릭 시 만든 멱등키.
+        ReservationResult rr = inventoryPort.reserveFromWarehouse(
+                cmd.requestId(), so.soNumber(), cmd.sku(), cmd.warehouseCode(), want);
+        // 3) 실제 잡힌 양만 도메인 라인에 누적(상태 그대로 SUBMITTED).
+        //    (주의) 같은 requestId 재요청 시 inventory 멱등 반환을 sales가 또 누적하는 이중계상은 #55(requestId 영속 dedup)로 분리.
+        so.reserveLine(cmd.sku(), rr.reserved());
+        repository.save(so);
+        return toResult(so);   // 응답에 라인별 reservedQuantity/부족분 → 사람이 보고 또 예약
+    }
+
+    /** [확정] approve — 자동예약 제거. 이미 잡힌 상태를 확정만. */
+    @Override
+    public SalesOrderStatusChangeResult approve(String soNumber) {
+        CurrentUser user = currentUserProvider.current();
+        SalesOrder so = load(soNumber);
+        authorizeDecision(user);
+        so.confirmByHq(user.employeeNumber(), LocalDateTime.now());   // reserveAndRoute 호출 없음!
+        repository.save(so);
+        // 부족분 남으면(BACKORDERED) procurement에 통지(기존 이벤트 그대로)
+        List<StockTransferLine> shortfall = so.shortfallLines();
+        if (!shortfall.isEmpty()) {
+            procurementPort.requestPurchase(so.soNumber(), so.toWarehouseCode(), shortfall);
+        }
+        return statusChange(so, user.employeeNumber(), so.approvedAt(), null);
+    }
+
+    /** [재확정] fulfill-backorder — 재예약 없음(예약은 reserveLine으로 이미 함). 확정만. */
+    @Override
+    public SalesOrderStatusChangeResult fulfillBackorder(String soNumber) {
+        CurrentUser user = currentUserProvider.current();
+        SalesOrder so = load(soNumber);
+        authorizeDecision(user);
+        LocalDateTime now = LocalDateTime.now();
+        so.refulfill(now);
+        repository.save(so);
+        return statusChange(so, user.employeeNumber(), now, null);
     }
 
     @Override
@@ -166,47 +231,9 @@ public class SalesOrderService implements SalesOrderUseCase {
         authorizeOwnerWrite(so, currentUserProvider.current());
         so.cancel(currentUserProvider.current().employeeNumber(), LocalDateTime.now());
         repository.save(so);
+        // 예약반납
+        inventoryPort.release(so.soNumber());
         return statusChange(so, currentUserProvider.current().employeeNumber(), so.canceledAt(), null);
-    }
-
-    @Override
-    public SalesOrderStatusChangeResult approve(String soNumber) {
-        CurrentUser currentUser = currentUserProvider.current();
-        SalesOrder so = load(soNumber);
-        authorizeDecision(currentUser);
-        requireHqDecidable(so); // 외부 예약 호출 전 상태 선검증(예약 후 도메인 throw 시 고아 예약 방지)
-
-        Routing routing = reserveAndRoute(so);                  // 라인별 가용분 예약 + 부족분 소스 결정
-        so.confirmByHq(currentUser.employeeNumber(), LocalDateTime.now(), routing.reservations());
-        repository.save(so);
-
-        // 부족분 통지: BUY/MAKE 구분 없이 전량 procurement로. 분기/PO/작업지시는 procurement가.
-        if (!routing.shortfall().isEmpty()) {
-            procurementPort.requestPurchase(so.soNumber(), so.toWarehouseCode(), routing.shortfall());
-        }
-
-        return statusChange(so, currentUser.employeeNumber(), so.approvedAt(), null);
-    }
-
-    @Override
-    public SalesOrderStatusChangeResult fulfillBackorder(String soNumber) {
-        CurrentUser currentUser = currentUserProvider.current();
-        SalesOrder so = load(soNumber);
-        authorizeDecision(currentUser);
-        requireBackordered(so); // 외부 예약 호출 전 상태 선검증
-
-        // 생산/구매 입고분으로 '미충족 라인만' 재예약(동기). 생산/구매 재요청은 안 함(confirm 때 이미 요청).
-        Routing routing = reserveAndRoute(so);
-        LocalDateTime now = LocalDateTime.now();
-        so.refulfill(routing.reservations(), now);
-        repository.save(so);
-
-        if (so.status() == SalesOrderStatus.IN_FULFILLMENT) {
-//            eventPublisher.publishFulfilling(so.soNumber());
-            return statusChange(so, currentUser.employeeNumber(), now, null);  // 전이 시각으로
-        }
-        // 아직 부족하면 BACKORDERED 유지(멱등 재시도 가능). 상태 불변이니 승인 시각 유지.
-        return statusChange(so, currentUser.employeeNumber(), so.approvedAt(), null);
     }
 
     @Override
@@ -216,6 +243,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         authorizeDecision(currentUser);
         so.reject(currentUser.employeeNumber(), reason, LocalDateTime.now()); // 사유 필수 검증은 도메인이
         repository.save(so);
+        inventoryPort.release(so.soNumber()); // 예약 반납(보상) — 멱등
         return statusChange(so, currentUser.employeeNumber(), so.rejectedAt(), so.rejectedReason());
     }
 
@@ -228,13 +256,10 @@ public class SalesOrderService implements SalesOrderUseCase {
         so.receive(currentUser.employeeNumber(), LocalDateTime.now()); // APPROVED 검증은 도메인이
         repository.save(so);
 
-        // inventory가 listen할 예정
+        // 출고(예약분 차감)는 이벤트로: sales.order.received 발행 → inventory가 구독해 해당 soNumber의 예약분을 issue.
+        // 트랜잭셔널 아웃박스(SO 저장과 같은 커밋). 예약은 approve 때 이미 동기 확정돼 오버셀 위험 없음 → 출고는 비동기 안전.
+        // (동기 issue REST 경로 inventoryPort.transferForSalesOrderReceive 도 존재하나, 표준 receive는 이벤트만 사용 — 이중차감 방지.)
         eventPublisher.publishReceived(so.soNumber());
-//        // 실재고 이동(예약분 출고). 동기: Inventory 호출 실패 시 이 트랜잭션 롤백 → 수령도 취소(정합성 결속).
-//        // (인벤토리는 동기 issue REST를 구현 — 이벤트 소비자 없음. 어댑터 실연동 전엔 스텁 no-op.)
-//        inventoryPort.transferForSalesOrderReceive(
-//                so.soNumber(), so.toWarehouseCode(),
-//                currentUser.employeeNumber(), toTransferLines(so));
 
         return statusChange(so, currentUser.employeeNumber(), so.receivedAt(), null);
     }
@@ -246,65 +271,13 @@ public class SalesOrderService implements SalesOrderUseCase {
                 .orElseThrow(() -> new ApiException(ErrorCode.SALES_ORDER_NOT_FOUND));
     }
 
-    /** 외부 예약 호출 전 상태 선검증(예약 성공 후 도메인 전이가 throw 되어 고아 예약이 남는 것 방지). */
-    private void requireHqDecidable(SalesOrder so) {
-        if (!so.status().canHqDecide()) {
-            throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_DECIDABLE);
-        }
-    }
-
-    private void requireBackordered(SalesOrder so) {
-        if (!so.status().isBackordered()) {
-            throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_FULFILLABLE);
-        }
-    }
-
-    /** 도메인 라인 -> Inventory 포트 전송 라인(sku/수량). */
-    private List<StockTransferLine> toTransferLines(SalesOrder so) {
-        return so.lines().stream()
-                .map(l -> new StockTransferLine(l.sku(), l.quantity()))
-                .toList();
-    }
-
-    /**
-     * 미충족 라인(quantity - reservedQuantity)만 재고 예약하고, 라인별 예약결과 + 부족분 소싱(생산/구매) 라우팅을 만든다.
-     * approve(confirm)/fulfillBackorder(refulfill) 공통 사용. (음수 방지는 Inventory 의 원자적 차감이 보장)
-     */
-    // 아직 부족한 라인만 계산
-    // Inventory에 "이 수량 예약 가능해?" 라고 물음
-    // 예약된 수량은 LineReservation으로 만듦
-    // 부족분 있으면 Catalog의 sourcing type을 보고 MAKE면 생산 요청, 아니면 구매 요청 목록에 넣는다.
-    private Routing reserveAndRoute(SalesOrder so) {
-        List<StockTransferLine> outstanding = so.lines().stream()
-                .filter(l -> !l.fullyReserved())
-                .map(l -> new StockTransferLine(l.sku(), l.shortfall()))
-                .toList();
-        List<ReservationResult> results = inventoryPort.reserve(so.soNumber(), so.toWarehouseCode(), outstanding);
-
-        List<LineReservation> reservations = new ArrayList<>();
-        List<StockTransferLine> shortfall = new ArrayList<>();
-        for (ReservationResult r : results) {
-            reservations.add(new LineReservation(r.sku(), r.reserved(), r.sourceWarehouseCode()));
-            int stillShort = r.requested() - r.reserved();
-            if (stillShort > 0) {
-                shortfall.add(new StockTransferLine(r.sku(), stillShort)); // buy/make 미결정 - procurement가 판정
-            }
-        }
-        return new Routing(reservations, shortfall);
-    }
-
-    // 부족분 단일 라우팅(BUY/MAKE 구분 없이 전량 procurement로 통지)
-    private record Routing(List<LineReservation> reservations,
-                           List<StockTransferLine> shortfall) {
-    }
-
     /*
      * 권한 매트릭스 (의도된 설계 — 규칙 변경 시 이 표도 함께 갱신):
      *   생성        : 본인창고 지점 사용자, ADMIN
      *   조회        : HQ(전체), 지점(본인창고만), ADMIN
      *   수정        : 본인창고 지점 사용자, ADMIN   (REQUESTED 에서만)
      *   제출(->HQ)  : 본인창고 BRANCH_MANAGER, ADMIN  (REQUESTED -> SUBMITTED)
-     *   취소        : 본인창고 지점 사용자, ADMIN   (REQUESTED/SUBMITTED 까지)
+     *   취소        : 본인창고 지점 사용자, ADMIN   (REQUESTED 에서만; 제출 후는 withdraw 로 되돌린 뒤)
      *   승인/반려   : HQ_MANAGER, ADMIN            (SUBMITTED 에서)
      *   수령(도착)  : 본인창고 지점 사용자, ADMIN   (IN_FULFILLMENT 에서)
      *
@@ -368,7 +341,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         List<SalesOrderLineResult> lines = so.lines().stream()
                 .map(l -> new SalesOrderLineResult(
                         l.lineNo(), l.sku(), l.nameSnapshot(), l.unitPriceSnapshot(), l.quantity(),
-                        l.reservedQuantity(), l.fulfillmentSource(), l.fromWarehouseCode()))
+                        l.reservedQuantity(), l.fulfillmentSource()))
                 .toList();
         return new SalesOrderResult(
                 so.soNumber(),

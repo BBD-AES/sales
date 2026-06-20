@@ -2,6 +2,7 @@ package com.bbd.sales.application.service;
 
 import com.bbd.sales.application.command.CreateSalesOrderCommand;
 import com.bbd.sales.application.command.SalesOrderLineCommand;
+import com.bbd.sales.application.command.ReserveLineCommand;
 import com.bbd.sales.application.port.out.*;
 import com.bbd.sales.application.command.SearchSalesOrderQuery;
 import com.bbd.sales.application.command.UpdateSalesOrderCommand;
@@ -79,14 +80,21 @@ class SalesOrderServiceTest {
         return so;
     }
 
+    /** REQUESTED 상태 단일 라인(취소 등 REQUESTED 전용 테스트용). */
+    private SalesOrder requestedOrder(String sku, int qty) {
+        return SalesOrder.request("SO-1", "WH-BR-001", "강남 1지점",
+                SalesOrderPriority.NORMAL, null,
+                List.of(new SalesOrderLine(1, sku, "상품", new BigDecimal("1000"), qty)),
+                "BR003", NOW);
+    }
+
     @Test
-    @DisplayName("approve: 전량 가용 -> IN_FULFILLMENT, 생산/구매 호출 없음")
+    @DisplayName("approve: 사전 전량 예약된 상태 확정 -> IN_FULFILLMENT, 구매요청 없음")
     void approve_allReserved_inFulfillment() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
+        so.reserveLine("OIL-FLT-001", 10); // 사전 전량 예약(SUBMITTED 유지)
         when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
-        when(inventoryPort.reserve(eq("SO-1"), eq("WH-BR-001"), anyList()))
-                .thenReturn(List.of(new ReservationResult("OIL-FLT-001", 10, 10)));
 
         service.approve("SO-1");
 
@@ -96,40 +104,37 @@ class SalesOrderServiceTest {
     }
 
     @Test
-    @DisplayName("approve: 부족분 BUY -> BACKORDERED + 구매요청(PR), 생산 호출 없음")
-    void approve_shortfallBuy_requestsPurchase() {
+    @DisplayName("approve: 부족분 남은 채 확정 -> BACKORDERED + 부족분 구매요청(PR)")
+    void approve_shortfall_backordered_requestsPurchase() {
+        SalesOrder so = submitted("RLY-12V-30A-01", 5);
+        so.reserveLine("RLY-12V-30A-01", 2); // 부분 예약(부족 3)
+        when(currentUserProvider.current()).thenReturn(HQ);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+
+        service.approve("SO-1");
+
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED);
+        assertThat(so.lines().get(0).reservedQuantity()).isEqualTo(2); // 부족 3 남음
+        assertThat(so.lines().get(0).fulfillmentSource()).isEqualTo(FulfillmentSource.BACKORDERED);
+        verify(procurementPort).requestPurchase(eq("SO-1"), eq("WH-BR-001"), anyList());
+    }
+
+    @Test
+    @DisplayName("approve: 예약 0이면 -> BACKORDERED + 전량 구매요청")
+    void approve_nothingReserved_backordered() {
         SalesOrder so = submitted("RLY-12V-30A-01", 5);
         when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
-        when(inventoryPort.reserve(any(), any(), anyList()))
-                .thenReturn(List.of(new ReservationResult("RLY-12V-30A-01", 5, 0)));
 
         service.approve("SO-1");
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED);
         assertThat(so.lines().get(0).reservedQuantity()).isZero();
-        assertThat(so.lines().get(0).fulfillmentSource()).isEqualTo(FulfillmentSource.BACKORDERED);
         verify(procurementPort).requestPurchase(eq("SO-1"), eq("WH-BR-001"), anyList());
     }
 
     @Test
-    @DisplayName("approve: 부족분 MAKE -> BACKORDERED + procurement 통지(buy/make는 procurement)")
-    void approve_shortfallMake_requestsProduction() {
-        SalesOrder so = submitted("CLT-DSK-MED-01", 3);
-        when(currentUserProvider.current()).thenReturn(HQ);
-        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
-        when(inventoryPort.reserve(any(), any(), anyList()))
-                .thenReturn(List.of(new ReservationResult("CLT-DSK-MED-01", 3, 1)));
-
-        service.approve("SO-1");
-
-        assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED);
-        assertThat(so.lines().get(0).fulfillmentSource()).isEqualTo(FulfillmentSource.BACKORDERED);
-        verify(procurementPort).requestPurchase(eq("SO-1"), eq("WH-BR-001"), anyList());
-    }
-
-    @Test
-    @DisplayName("approve: HQ 권한 아니면 거부, 재고 예약 호출 안 함")
+    @DisplayName("approve: HQ 권한 아니면 거부, 구매요청 안 함")
     void approve_nonHqRole_forbidden() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
         when(currentUserProvider.current()).thenReturn(STAFF);
@@ -138,12 +143,12 @@ class SalesOrderServiceTest {
         assertThatThrownBy(() -> service.approve("SO-1"))
                 .isInstanceOf(ApiException.class);
 
-        verify(inventoryPort, never()).reserve(any(), any(), anyList());
+        verify(procurementPort, never()).requestPurchase(any(), any(), anyList());
     }
 
     @Test
-    @DisplayName("approve: SUBMITTED 아니면 NOT_DECIDABLE, 재고 예약 호출 안 함")
-    void approve_notSubmitted_throws_noReserve() {
+    @DisplayName("approve: SUBMITTED 아니면 NOT_DECIDABLE, 구매요청 안 함")
+    void approve_notSubmitted_throws() {
         SalesOrder requested = SalesOrder.request("SO-1", "WH-BR-001", "강남 1지점",
                 SalesOrderPriority.NORMAL, null,
                 List.of(new SalesOrderLine(1, "OIL-FLT-001", "상품", new BigDecimal("1000"), 10)),
@@ -154,18 +159,92 @@ class SalesOrderServiceTest {
         assertThatThrownBy(() -> service.approve("SO-1"))
                 .isInstanceOf(SalesOrderStateException.class);
 
-        verify(inventoryPort, never()).reserve(any(), any(), anyList());
+        verify(procurementPort, never()).requestPurchase(any(), any(), anyList());
     }
 
     @Test
-    @DisplayName("fulfillBackorder: 전량 재예약되면 IN_FULFILLMENT")
-    void fulfillBackorder_reserved_inFulfillment() {
-        SalesOrder so = submitted("RLY-12V-30A-01", 5);
-        so.confirmByHq("HQ001", NOW, List.of(new LineReservation("RLY-12V-30A-01", 0))); // reserved=0 -> BACKORDERED
+    @DisplayName("reserveLine: 사람이 고른 창고에서 예약 -> 실제 잡힌 양 라인 누적, 상태는 SUBMITTED 유지")
+    void reserveLine_accumulatesAndStaysSubmitted() {
+        SalesOrder so = submitted("OIL-FLT-001", 10);
         when(currentUserProvider.current()).thenReturn(HQ);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
-        when(inventoryPort.reserve(any(), any(), anyList()))
-                .thenReturn(List.of(new ReservationResult("RLY-12V-30A-01", 5, 5)));
+        when(inventoryPort.reserveFromWarehouse("req-1", "SO-1", "OIL-FLT-001", "WH-HQ-001", 10))
+                .thenReturn(new ReservationResult("OIL-FLT-001", 10, 7)); // 7만 잡힘
+
+        service.reserveLine(new ReserveLineCommand("SO-1", "OIL-FLT-001", "WH-HQ-001", 10, "req-1"));
+
+        assertThat(so.lines().get(0).reservedQuantity()).isEqualTo(7);
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.SUBMITTED); // 예약은 전이가 아님
+    }
+
+    @Test
+    @DisplayName("reserveLine: 예약 불가 상태면 inventory 예약 호출 안 함(고아 홀드 방지)")
+    void reserveLine_invalidState_noInventoryCall() {
+        SalesOrder requested = requestedOrder("OIL-FLT-001", 10); // REQUESTED → 예약 불가
+        when(currentUserProvider.current()).thenReturn(HQ);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(requested));
+
+        assertThatThrownBy(() -> service.reserveLine(
+                new ReserveLineCommand("SO-1", "OIL-FLT-001", "WH-HQ-001", 10, "req-x")))
+                .isInstanceOf(SalesOrderStateException.class);
+
+        verify(inventoryPort, never()).reserveFromWarehouse(any(), any(), any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("reserveLine: 요청이 미충족분보다 크면 shortfall 만큼만 inventory에 요청")
+    void reserveLine_clampsRequestToShortfall() {
+        SalesOrder so = submitted("OIL-FLT-001", 10);
+        so.reserveLine("OIL-FLT-001", 8); // 사전 8 예약 → 부족 2
+        when(currentUserProvider.current()).thenReturn(HQ);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+        when(inventoryPort.reserveFromWarehouse("req-2", "SO-1", "OIL-FLT-001", "WH-HQ-002", 2)) // 10 요청해도 2만
+                .thenReturn(new ReservationResult("OIL-FLT-001", 2, 2));
+
+        service.reserveLine(new ReserveLineCommand("SO-1", "OIL-FLT-001", "WH-HQ-002", 10, "req-2"));
+
+        assertThat(so.lines().get(0).reservedQuantity()).isEqualTo(10);
+        verify(inventoryPort).reserveFromWarehouse("req-2", "SO-1", "OIL-FLT-001", "WH-HQ-002", 2);
+    }
+
+    @Test
+    @DisplayName("reserveLine: 비양수 수량은 로컬 거부 + inventory 호출 안 함")
+    void reserveLine_nonPositiveQuantity_rejected() {
+        SalesOrder so = submitted("OIL-FLT-001", 10);
+        when(currentUserProvider.current()).thenReturn(HQ);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+
+        assertThatThrownBy(() -> service.reserveLine(
+                new ReserveLineCommand("SO-1", "OIL-FLT-001", "WH-HQ-001", 0, "req-0")))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verify(inventoryPort, never()).reserveFromWarehouse(any(), any(), any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("reserveLine: 이미 충족된 라인은 거부 + inventory 호출 안 함")
+    void reserveLine_fullyReserved_rejects() {
+        SalesOrder so = submitted("OIL-FLT-001", 10);
+        so.reserveLine("OIL-FLT-001", 10); // 전량 예약 → 부족 0
+        when(currentUserProvider.current()).thenReturn(HQ);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+
+        assertThatThrownBy(() -> service.reserveLine(
+                new ReserveLineCommand("SO-1", "OIL-FLT-001", "WH-HQ-002", 5, "req-3")))
+                .isInstanceOf(ApiException.class);
+
+        verify(inventoryPort, never()).reserveFromWarehouse(any(), any(), any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("fulfillBackorder: 보충분까지 예약돼 전 라인 full이면 IN_FULFILLMENT")
+    void fulfillBackorder_reserved_inFulfillment() {
+        SalesOrder so = submitted("RLY-12V-30A-01", 5);
+        so.reserveLine("RLY-12V-30A-01", 2); // 부분
+        so.confirmByHq("HQ001", NOW);                      // -> BACKORDERED(부족 3)
+        so.reserveLine("RLY-12V-30A-01", 3); // 보충분 마저(BACKORDERED 에서)
+        when(currentUserProvider.current()).thenReturn(HQ);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
         service.fulfillBackorder("SO-1");
 
@@ -173,49 +252,48 @@ class SalesOrderServiceTest {
     }
 
     @Test
-    @DisplayName("receive: IN_FULFILLMENT -> RECEIVED, 재고 이동 호출 + 수령 이벤트")
-    void receive_inFulfillment_transferAndPublishes() {
+    @DisplayName("fulfillBackorder: 여전히 부족하면 BACKORDERED 유지")
+    void fulfillBackorder_stillShort_staysBackordered() {
+        SalesOrder so = submitted("RLY-12V-30A-01", 5);
+        so.reserveLine("RLY-12V-30A-01", 2);
+        so.confirmByHq("HQ001", NOW); // -> BACKORDERED, reserved=2
+        when(currentUserProvider.current()).thenReturn(HQ);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+
+        service.fulfillBackorder("SO-1");
+
+        assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED);
+        assertThat(so.lines().get(0).reservedQuantity()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("receive: IN_FULFILLMENT -> RECEIVED, sales.order.received 발행")
+    void receive_inFulfillment_publishesReceived() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
-        so.confirmByHq("HQ001", NOW, List.of(new LineReservation("OIL-FLT-001", 10))); // 전량 확보 -> IN_FULFILLMENT
+        so.reserveLine("OIL-FLT-001", 10); // 전량 예약
+        so.confirmByHq("HQ001", NOW);                   // -> IN_FULFILLMENT
         when(currentUserProvider.current()).thenReturn(STAFF);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
         service.receive("SO-1");
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.RECEIVED);
-        verify(inventoryPort).transferForSalesOrderReceive(eq("SO-1"), eq("WH-BR-001"), eq("BR003"), anyList());
+        verify(eventPublisher).publishReceived("SO-1");
     }
 
     @Test
-    @DisplayName("receive: 재고 이동 실패 시 예외 전파 + 수령 이벤트 미발행(정합성 결속)")
-    void receive_inventoryFails_propagates_noEvent() {
+    @DisplayName("receive: 이벤트 발행 실패 시 예외 전파(트랜잭션 롤백 → 수령 취소)")
+    void receive_publishFails_propagates() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
-        so.confirmByHq("HQ001", NOW, List.of(new LineReservation("OIL-FLT-001", 10)));
+        so.reserveLine("OIL-FLT-001", 10);
+        so.confirmByHq("HQ001", NOW);
         when(currentUserProvider.current()).thenReturn(STAFF);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
-        doThrow(new RuntimeException("inventory down"))
-                .when(inventoryPort).transferForSalesOrderReceive(any(), any(), any(), anyList());
+        doThrow(new RuntimeException("outbox down"))
+                .when(eventPublisher).publishReceived("SO-1");
 
         assertThatThrownBy(() -> service.receive("SO-1"))
                 .isInstanceOf(RuntimeException.class);
-
-    }
-
-    @Test
-    @DisplayName("fulfillBackorder: 재예약해도 여전히 부족하면 BACKORDERED 유지 + fulfilling 미발행")
-    void fulfillBackorder_stillShort_staysBackordered() {
-        SalesOrder so = submitted("RLY-12V-30A-01", 5);
-        so.confirmByHq("HQ001", NOW, List.of(new LineReservation("RLY-12V-30A-01", 0))); // 전량 부족 -> BACKORDERED
-        when(currentUserProvider.current()).thenReturn(HQ);
-        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
-        when(inventoryPort.reserve(any(), any(), anyList()))
-                .thenReturn(List.of(new ReservationResult("RLY-12V-30A-01", 5, 2))); // 5 중 2만 확보 -> 여전히 부족
-
-        service.fulfillBackorder("SO-1");
-
-        assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED); // 상태 유지 확인
-        assertThat(so.lines().get(0).reservedQuantity()).isEqualTo(2);
-
     }
 
     // === 읽기 스코핑 ===
@@ -227,7 +305,7 @@ class SalesOrderServiceTest {
                 .thenReturn(new SalesOrderPage(List.of(), 0L, 0, 20));
         // 지점이 타지점 코드로 필터 시도
         SearchSalesOrderQuery q = new SearchSalesOrderQuery(
-                null, null, "WH-BR-999", null, null, null, 0, 20
+                null, null, "WH-BR-999", null, null, null, null, 0, 20
         );
 
         service.search(q);
@@ -245,7 +323,7 @@ class SalesOrderServiceTest {
         when(repository.search(any(), anyInt(), anyInt()))
                 .thenReturn(new SalesOrderPage(List.of(), 0L, 0, 20));
         SearchSalesOrderQuery q = new SearchSalesOrderQuery(
-                null, null, "WH-BR-002", null, null, null, 0, 20
+                null, null, "WH-BR-002", null, null, null, null, 0, 20
         );
 
         service.search(q);
@@ -304,7 +382,7 @@ class SalesOrderServiceTest {
     @Test
     @DisplayName("cancel: 본인 창고 지점 사용자 OK")
     void cancel_ownBranch_ok() {
-        SalesOrder so = submitted("OIL-FLT-001", 10);
+        SalesOrder so = requestedOrder("OIL-FLT-001", 10); // 취소는 REQUESTED 에서만
         when(currentUserProvider.current()).thenReturn(STAFF);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
@@ -316,7 +394,7 @@ class SalesOrderServiceTest {
     @Test
     @DisplayName("cancel: ADMIN은 소유권 무관 OK")
     void cancel_admin_bypassesOwnership() {
-        SalesOrder so = submitted("OIL-FLT-001", 10);
+        SalesOrder so = requestedOrder("OIL-FLT-001", 10); // 취소는 REQUESTED 에서만
         when(currentUserProvider.current()).thenReturn(ADMIN);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
@@ -340,15 +418,15 @@ class SalesOrderServiceTest {
     }
 
     @Test
-    @DisplayName("receive: 타지점 사용자 -> FORBIDDEN, 재고이동 호출 안 함")
-    void receive_otherBranch_forbidden_noTransfer() {
+    @DisplayName("receive: 타지점 사용자 -> FORBIDDEN, 발행 안 함")
+    void receive_otherBranch_forbidden_noPublish() {
         SalesOrder so = submitted("OIL-FLT-001", 10);
         when(currentUserProvider.current()).thenReturn(OTHER_BRANCH);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
 
         assertThatThrownBy(() -> service.receive("SO-1"))
                 .isInstanceOf(ApiException.class);
-        verify(inventoryPort, never()).transferForSalesOrderReceive(any(), any(), any(), anyList());
+        verify(eventPublisher, never()).publishReceived(any());
     }
 
     // ===== 생성 소유권 (Step 3) =====

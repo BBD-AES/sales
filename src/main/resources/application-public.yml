@@ -75,6 +75,7 @@ spring:
   jackson:
     deserialization:
       accept-float-as-int: false
+      fail-on-unknown-properties: false   # 다운스트림(inventory 등) 응답 필드 추가/축소돼도 안 깨지게(관용 역직렬화). local/public 정렬.
 
 bbd:
   security:

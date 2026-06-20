@@ -11,7 +11,6 @@ public record SalesOrderLineResponse(
         BigDecimal unitPriceSnapshot,
         int quantity,
         int reservedQuantity,
-        FulfillmentSource fulfillmentSource,
-        String fromWarehouseCode
+        FulfillmentSource fulfillmentSource
 ) {
 }

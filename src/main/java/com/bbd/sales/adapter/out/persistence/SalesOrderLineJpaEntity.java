@@ -43,9 +43,6 @@ public class SalesOrderLineJpaEntity {
     @Setter(AccessLevel.PACKAGE)
     private FulfillmentSource fulfillmentSource;
 
-    @Setter(AccessLevel.PACKAGE)
-    private String fromWarehouseCode;   // 출발지(출고창고)=소스. confirm 시 라인별 기록, 전 null
-
     public SalesOrderLineJpaEntity(int lineNo, String sku, String nameSnapshot,
                                    BigDecimal unitPriceSnapshot, int quantity) {
         this.lineNo = lineNo;
@@ -63,6 +60,5 @@ public class SalesOrderLineJpaEntity {
         this.quantity = src.quantity;
         this.reservedQuantity = src.reservedQuantity;
         this.fulfillmentSource = src.fulfillmentSource;
-        this.fromWarehouseCode = src.fromWarehouseCode;
     }
 }

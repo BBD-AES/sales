@@ -47,8 +47,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p><b>일부러 제외</b>:
  * <ul>
- *   <li>{@code sales.order.{requested,updated,canceled,fulfilling,backordered,rejected,received}} — 발행 제거됨(죽음).</li>
- *   <li>{@code sales.stock-out-requested} — 동기 REST 예약/출고(issue)로 대체됨(이벤트 아님, inventory_stock_reservation_handoff §3.4).</li>
+ *   <li>{@code sales.order.{requested,updated,canceled,fulfilling,backordered,rejected}} — 발행 제거됨(죽음).</li>
+ *   <li>{@code sales.stock-out-requested} — 출고는 sales.order.received(이벤트)로 대체됨(sales-order-received.md). 옛 blind 차감 컨슈머 폐기 대상.</li>
  *   <li>{@code procurement.stock-in-requested} — sales 직접 구독 폐기, inventory.stock-replenished 로 변경(inventory-stock-replenished 핸드오프).</li>
  * </ul>
  *
@@ -72,14 +72,16 @@ class SalesOrderEventTopicPublishingTest {
 
     /** sales가 발행하는 내부 알림 토픽(자가 구독). 운영 코드 규칙 "sales.order." + eventType. */
     private static final String TOPIC_SUBMITTED = "sales.order.submitted";
+    /** sales가 발행하는 수령 통지(구독 주체 inventory → 해당 soNumber 예약분 issue). sales-order-received.md */
+    private static final String TOPIC_RECEIVED = "sales.order.received";
     /** sales가 발행하는 procurement 계약 토픽(부족분 구매/생산 요청). */
     private static final String TOPIC_PURCHASE_REQUESTED = "sales.purchase-requested";
     /** sales가 구독하는 백오더 보충 통지(발행 주체 inventory). */
     private static final String TOPIC_STOCK_REPLENISHED = "inventory.stock-replenished";
 
-    /** 현재 sales가 실제로 필요로 하는 토픽만(발행 2 + 구독 1). 이 집합만 생성/검증한다. */
+    /** 현재 sales가 실제로 필요로 하는 토픽(발행 3 + 구독 1). 이 집합만 생성/검증한다. */
     private static final List<String> REQUIRED_TOPICS =
-            List.of(TOPIC_SUBMITTED, TOPIC_PURCHASE_REQUESTED, TOPIC_STOCK_REPLENISHED);
+            List.of(TOPIC_SUBMITTED, TOPIC_RECEIVED, TOPIC_PURCHASE_REQUESTED, TOPIC_STOCK_REPLENISHED);
 
     /** 파티션 키(같은 주문 같은 파티션). 운영 publish와 동일하게 soNumber. */
     private static final String SO_NUMBER = "SO-2026-000042";
@@ -114,7 +116,7 @@ class SalesOrderEventTopicPublishingTest {
     }
 
     @Test
-    @DisplayName("필요한 토픽 3종(submitted·purchase-requested·stock-replenished)만 멱등 생성 → 존재 확인")
+    @DisplayName("필요한 토픽 4종(submitted·received·purchase-requested·stock-replenished)만 멱등 생성 → 존재 확인")
     void createRequiredTopicsOnly() throws Exception {
         // 1) 필요한 토픽만 명시 생성 — auto-create 꺼져 있어도 확실히 생성. 이미 있으면 토픽별로 멱등 통과.
         var createResult = admin.createTopics(

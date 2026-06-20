@@ -4,7 +4,9 @@ import com.bbd.sales.adapter.in.web.dto.*;
 import com.bbd.sales.application.command.CreateSalesOrderCommand;
 import com.bbd.sales.application.command.SalesOrderLineCommand;
 import com.bbd.sales.application.command.SearchSalesOrderQuery;
+import com.bbd.sales.application.command.ReserveLineCommand;
 import com.bbd.sales.application.command.UpdateSalesOrderCommand;
+import com.bbd.sales.application.port.out.WarehouseStock;
 import com.bbd.sales.application.result.*;
 import com.bbd.sales.domain.SalesOrderPriority;
 import com.bbd.sales.domain.SalesOrderStatus;
@@ -26,11 +28,11 @@ public class SalesOrderWebMapper {
 
     public SearchSalesOrderQuery toSearchQuery(
             SalesOrderStatus status, SalesOrderPriority priority,
-            String toWarehouseCode, String requestedBy,
+            String toWarehouseCode, String requestedBy, String receivedBy,
             LocalDate startDate, LocalDate endDate,
             int page, int size) {
         return new SearchSalesOrderQuery(
-                status, priority, toWarehouseCode, requestedBy,
+                status, priority, toWarehouseCode, requestedBy, receivedBy,
                 startDate, endDate, page, size);
     }
 
@@ -48,6 +50,16 @@ public class SalesOrderWebMapper {
                 req.priority(),
                 req.note(),
                 req.lines() != null ? toLineCommands(req.lines()) : null);
+    }
+
+    public ReserveLineCommand toReserveLineCommand(String soNumber, ReserveLineRequest req) {
+        return new ReserveLineCommand(soNumber, req.sku(), req.warehouseCode(), req.quantity(), req.requestId());
+    }
+
+    public List<WarehouseStockResponse> toStockResponses(List<WarehouseStock> stocks) {
+        return stocks.stream()
+                .map(s -> new WarehouseStockResponse(s.warehouseCode(), s.warehouseName(), s.available()))
+                .toList();
     }
 
     private List<SalesOrderLineCommand> toLineCommands(List<SalesOrderLineRequest> lines) {
@@ -98,6 +110,6 @@ public class SalesOrderWebMapper {
     private SalesOrderLineResponse toLineResponse(SalesOrderLineResult r) {
         return new SalesOrderLineResponse(
                 r.lineNo(), r.sku(), r.nameSnapshot(), r.unitPriceSnapshot(), r.quantity(),
-                r.reservedQuantity(), r.fulfillmentSource(), r.fromWarehouseCode());
+                r.reservedQuantity(), r.fulfillmentSource());
     }
 }

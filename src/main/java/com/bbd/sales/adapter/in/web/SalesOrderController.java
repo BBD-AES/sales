@@ -7,12 +7,15 @@ import com.bbd.sales.domain.SalesOrderStatus;
 import com.bbd.securitycore.adapter.in.annotation.RequireRole;
 import com.bbd.securitycore.domain.UserRole;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * 인바운드(구동) 어댑터 = REST 진입점.
@@ -26,6 +29,7 @@ import java.time.LocalDate;
 //   - 신규 엔드포인트는 반드시 @RequireRole 를 직접 달 것(클래스 기본값 없음 = 미부착 시 역할 무제한).
 @RestController
 @RequiredArgsConstructor
+@Validated   // @RequestParam 등 메서드 파라미터 제약(@NotBlank) 활성화
 @RequestMapping("/api/v1/sales-orders")
 public class SalesOrderController {
 
@@ -40,6 +44,7 @@ public class SalesOrderController {
             @RequestParam(required = false) SalesOrderPriority priority,
             @RequestParam(required = false, name = "to_warehouse_code") String toWarehouseCode,
             @RequestParam(required = false, name = "requested_by") String requestedBy,
+            @RequestParam(required = false, name = "received_by") String receivedBy,
             @RequestParam(required = false, name = "start_date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
             @RequestParam(required = false, name = "end_date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate,
             @RequestParam(defaultValue = "0") int page,
@@ -47,7 +52,7 @@ public class SalesOrderController {
     ) {
         return webMapper.toSummaryPageResponse(
                 salesOrderUseCase.search(webMapper.toSearchQuery(
-                        status, priority, toWarehouseCode, requestedBy,
+                        status, priority, toWarehouseCode, requestedBy, receivedBy,
                         startDate, endDate, page, size)));
     }
 
@@ -67,6 +72,23 @@ public class SalesOrderController {
     @GetMapping("/{soNumber}")
     public SalesOrderDetailResponse get(@PathVariable String soNumber) {
         return webMapper.toDetailResponse(salesOrderUseCase.get(soNumber));
+    }
+
+    // [수동 예약] 가용 조회 — HQ가 창고를 고르려고 현황을 본다.
+    @RequireRole({UserRole.HQ_MANAGER, UserRole.ADMIN})
+    @GetMapping("/{soNumber}/stock-availability")
+    public List<WarehouseStockResponse> stockAvailability(@PathVariable String soNumber,
+                                                          @RequestParam @NotBlank String sku) {
+        return webMapper.toStockResponses(salesOrderUseCase.stockAvailability(soNumber, sku));
+    }
+
+    // [수동 예약] 사람이 고른 한 창고에서 라인 예약(여러 번). requestId=프론트 클릭당 멱등키(UUID).
+    @RequireRole({UserRole.HQ_MANAGER, UserRole.ADMIN})
+    @PostMapping("/{soNumber}/reservations")
+    public SalesOrderDetailResponse reserveLine(@PathVariable String soNumber,
+                                                @Valid @RequestBody ReserveLineRequest request) {
+        return webMapper.toDetailResponse(
+                salesOrderUseCase.reserveLine(webMapper.toReserveLineCommand(soNumber, request)));
     }
 
     // 수정: 지점 사용자(+ADMIN), REQUESTED 에서만(상태검증은 도메인)

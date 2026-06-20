@@ -1,5 +1,7 @@
 package com.bbd.sales.domain;
 
+import com.bbd.sales.application.port.out.StockTransferLine;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -169,6 +171,7 @@ public class SalesOrder {
             throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_WITHDRAWABLE);
         }
         this.status = SalesOrderStatus.REQUESTED;
+        this.lines.forEach(SalesOrderLine::clearReservation); // 외부 예약 반납(release)과 정합 — stale 예약으로 재제출→confirm 시 오충족 방지
         // TODO(audit): withdrawnBy/At 컬럼은 submit 감사 컬럼과 함께 별도 커밋.
     }
 
@@ -183,63 +186,57 @@ public class SalesOrder {
     }
 
     /**
-     * HQ 확정. SUBMITTED 에서만. 라인별 예약을 반영하고 주문 상태를 파생한다.
-     * 전 라인 충족이면 IN_FULFILLMENT, 부족분이 있으면 BACKORDERED. 승인자(HQ)를 기록.
+     * [라인 예약 — SUBMITTED/BACKORDERED 에서, 상태전이 없음]
+     * HQ가 "이 창고에서 N개" 예약할 때마다 호출. 실제 잡힌 양(reservedDelta)을 라인에 누적만 한다.
+     * 상태는 그대로 — 확정은 approve(confirmByHq)가, 재확정은 fulfill-backorder(refulfill)가 한다.
      */
-    public void confirmByHq(String actor, LocalDateTime now, List<LineReservation> reservations) {
-        if (!status.canHqDecide()) {
+    public void reserveLine(String sku, int reservedDelta) {
+        if (!(status.canHqDecide() || status.isBackordered()))      // SUBMITTED 또는 BACKORDERED 에서만
             throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_DECIDABLE);
-        }
-        applyReservations(reservations);
-        this.approvedBy = actor;
-        this.approvedAt = now;
-        this.status = deriveStatus();
+        SalesOrderLine line = findUniqueLineBySku(sku);             // 기존 헬퍼 재사용(없는/모호한 sku 예외)
+        line.applyReservation(reservedDelta);                       // 누적(+=) + quantity 상한 캡(기존 로직)
+        // ★ deriveStatus() 호출 안 함 → 상태 그대로 유지(예약은 전이가 아님)
+    }
+
+    /** 예약 가능 여부만 '부작용 없이' 선검증(상태 + sku 유일성). 서비스가 외부(inventory) 예약 호출 전에 불러 고아 홀드를 막는다. */
+    public void assertReservable(String sku) {
+        if (!(status.canHqDecide() || status.isBackordered()))
+            throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_DECIDABLE);
+        findUniqueLineBySku(sku); // 없거나 중복이면 throw(적용은 안 함)
+    }
+
+    /** 해당 sku 라인의 미충족분(quantity - reservedQuantity). 서비스가 예약 요청을 이만큼으로 clamp 하는 데 쓴다. */
+    public int shortfallFor(String sku) {
+        return findUniqueLineBySku(sku).shortfall();
     }
 
     /**
-     * 백오더 재충족. BACKORDERED 에서만. 생산/구매 입고분을 라인에 반영하고 상태를 재파생(승인자는 유지).
-     * 전 라인 충족되면 IN_FULFILLMENT, 아직 부족하면 BACKORDERED 유지.
+     * [확정] approve. 이미 예약된 상태를 '확정'만 한다(reservations 인자 없음 — 예약은 reserveLine이 미리 함).
+     * 전 라인 full이면 IN_FULFILLMENT, 부족분 남았으면 BACKORDERED(=사람이 부족 인정하고 확정).
      */
-    public void refulfill(List<LineReservation> reservations, LocalDateTime now) {
-        if (!status.isBackordered()) {
-            throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_FULFILLABLE);
-        }
-        applyReservations(reservations);
-        this.status = deriveStatus();
+    public void confirmByHq(String actor, LocalDateTime now) {
+        if (!status.canHqDecide()) throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_DECIDABLE); // SUBMITTED만
+        this.approvedBy = actor;
+        this.approvedAt = now;
+        this.lines.forEach(SalesOrderLine::finalizeSource); // 확정 시점에 라인별 충족소스 파생(예약 중엔 미확정)
+        this.status = deriveStatus();   // allMatch(fullyReserved) ? IN_FULFILLMENT : BACKORDERED
     }
 
-    private void applyReservations(List<LineReservation> reservations) {
-        if (reservations == null) {
-            throw new IllegalArgumentException("reservations 는 필수입니다.");
-        }
-
-        List<ReservationApplication> applications = new ArrayList<>();
-        Set<String> reservationSkus = new HashSet<>();
-        // 중간에 잘못된 예약이 있을 때 앞 예약만 저장되지 않도록 검증
-        for (LineReservation r : reservations) {
-            validateReservation(r);
-            if (!reservationSkus.add(r.sku())) {
-                throw new IllegalArgumentException("동일 sku 예약이 여러 번 전달되었습니다: " + r.sku());
-            }
-            applications.add(new ReservationApplication(findUniqueLineBySku(r.sku()), r));
-        }
-
-        for (ReservationApplication application : applications) {
-            LineReservation r = application.reservation();
-            application.line().applyReservation(r.reserved(), r.sourceWarehouseCode());
-        }
+    /**
+     * [재확정] fulfill-backorder. 보충분을 reserveLine으로 더 잡은 뒤 호출 → 이제 전 라인 full이면 IN_FULFILLMENT.
+     */
+    public void refulfill(LocalDateTime now) {
+        if (!status.isBackordered()) throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_FULFILLABLE); // BACKORDERED만
+        this.lines.forEach(SalesOrderLine::finalizeSource); // 보충분 반영 후 라인별 충족소스 재파생
+        this.status = deriveStatus();   // 아직 부족하면 BACKORDERED 유지(멱등 재시도 가능)
     }
 
-    private void validateReservation(LineReservation reservation) {
-        if (reservation == null) {
-            throw new IllegalArgumentException("reservation 항목은 null 일 수 없습니다.");
-        }
-        if (reservation.sku() == null || reservation.sku().isBlank()) {
-            throw new IllegalArgumentException("reservation sku 는 필수입니다.");
-        }
-        if (reservation.reserved() < 0) {
-            throw new IllegalArgumentException("reserved 는 0 이상이어야 합니다.");
-        }
+    /** 부족분 라인 = procurement 통지용. (approve 후 BACKORDERED면 이걸로 구매/생산 요청) */
+    public List<StockTransferLine> shortfallLines() {
+        return lines.stream()
+                .filter(l -> !l.fullyReserved())
+                .map(l -> new StockTransferLine(l.sku(), l.shortfall()))
+                .toList();
     }
 
     private SalesOrderLine findUniqueLineBySku(String sku) {
@@ -256,9 +253,6 @@ public class SalesOrder {
             throw new IllegalArgumentException("주문 라인에 없는 sku 예약입니다: " + sku);
         }
         return matched;
-    }
-
-    private record ReservationApplication(SalesOrderLine line, LineReservation reservation) {
     }
 
     /** 주문 상태 파생: 전 라인 충족 -> IN_FULFILLMENT, 하나라도 부족 -> BACKORDERED. */

@@ -15,6 +15,7 @@ public record SalesOrderSearchCriteria(
         String toWarehouseCode, // HQ 선택 필터(코드 기준)
         String toWarehouseName, // 지점 본인창고 스코핑(이름 기준)
         String requestedBy,
+        String receivedBy,      // 모바일 M-WORKLOG: 내가 도착 확인(receive)한 SO
         LocalDateTime from,
         LocalDateTime to
 ) {
