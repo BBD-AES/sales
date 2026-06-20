@@ -43,7 +43,7 @@
 | 기능 | 화면 | 엔드포인트 | 상태 |
 |---|---|---|---|
 | 로그인 | (Keycloak) | Keycloak OIDC | ✅ 외부 |
-| 도착 입고 확인(SO-06 흐름) | M-SCAN-IN | `PATCH /api/v1/sales-orders/{soNumber}/receive` (sales) | ⚠️ 부분(§6-1) |
+| 도착 입고 확인(전량) | M-SCAN-IN | `PATCH /api/v1/sales-orders/{soNumber}/receive` (sales) | ✅ |
 | 바코드→부품 정보 | M-SCAN-IN/OUT | `GET /api/v1/items/{sku}` (item) | ✅ |
 | 스캔 시 현재고 표시 | M-SCAN-IN | `GET /api/v1/stocks/{warehouseCode}/{sku}` (inventory) | ✅ |
 | 재고 조회 | M-INVENTORY | `GET /api/v1/stocks*` (inventory) | ✅ |
@@ -55,7 +55,7 @@
 ### 웹 전용 — **모바일에 넣지 않음**
 | 기능 | 이유 |
 |---|---|
-| SO 작성(SO-05) | 화면 정의서상 **지점 웹 전용**(p484). 모바일은 진입 안내 링크만 (단 §6-5 문서 충돌 주의) |
+| SO 작성(SO-05) | 화면 정의서상 **지점 웹 전용**(p484). 모바일은 진입 안내 링크만 (단 §6-1 문서 충돌 주의) |
 | SO 승인·거절(SO-02) | ADMIN·HQ_MANAGER 권한 — 모바일 사용자는 권한 없음 |
 | SO 출고 처리(SO-03) | HQ 권한, 본사 웹 |
 | 발주 목록(SO-01 본사 / SO-04 지점) | 웹 목록 화면 |
@@ -86,18 +86,18 @@
 - **데이터**:
   - 바코드(=SKU) → `GET /api/v1/items/{sku}` (부품명·코드) + `GET /api/v1/stocks/{myWh}/{sku}` (현재고).
   - 관련 발주: `GET /api/v1/sales-orders?status=IN_FULFILLMENT&to_warehouse_code={myWh}` 중 해당 SKU 포함 건.
-  - 확정: `PATCH /api/v1/sales-orders/{soNumber}/receive` (현재 전량 수령만, body 없음 — §6-1).
+  - 확정: `PATCH /api/v1/sales-orders/{soNumber}/receive` (전량 수령, body 없음).
 - **구성**:
   - 카메라 뷰파인더(전체 폭) + 플래시 토글 + "수동 입력" 토글.
   - 스캔 결과 카드: 부품명 · 코드 · 현재고.
   - 수량 스테퍼(필수) · 수신 창고(자기 지점 활성, 필수) · **관련 발주 드롭다운**(자기 지점 IN_FULFILLMENT만, 잔여 초과 차단) · 메모.
-  - 발주 연결 시: receive 확정 → IN_FULFILLMENT → RECEIVED 전환(현재 전량 수령). 미연결 일반 입고는 §6-4(이번 범위 외).
+  - 발주 연결 시: receive 확정 → IN_FULFILLMENT → RECEIVED 전환(전량 수령). **모바일은 SO 연결 입고만 지원**(미연결 일반 입고은 범위 외).
   - 확정 후: "M-HOME 복귀 또는 계속 스캔" 선택 모달.
 - **에러**: 미등록 부품·비활성 부품 안내, 잔여 초과 차단, 409 동시 처리 재조회.
 
 ### M-SCAN-OUT — 출고 스캔 (정비 사용 출고)  ⏸ 이번 범위 보류
 - **결정(로그 1)**: 출고 엔드포인트 신설이 필요한 "확장 미션"이라 이번 범위에서 **구현하지 않음.** 화면도 만들지 않음(홈 카드 비노출).
-- **추후 재개 시 스펙**(참고용 보존): 뷰파인더 + 수량(현재고 이하) · 출고 창고 · 사용 사유(수리·교환·검사·기타) · 작업번호 → MovementType.OUT. 선행: inventory에 사용 출고(consume) 엔드포인트 신설(§6-2).
+- **추후 재개 시 스펙**(참고용 보존): 뷰파인더 + 수량(현재고 이하) · 출고 창고 · 사용 사유(수리·교환·검사·기타) · 작업번호 → MovementType.OUT. 선행: inventory에 사용 출고(consume) 엔드포인트 신설.
 
 ### M-INVENTORY — 재고 조회  ✅
 - **목적**: 현장에서 부품 재고 즉시 확인.
@@ -165,25 +165,16 @@
 
 ---
 
-## 6. 백엔드 갭 — 엔드포인트 없는데 필수 기능 (사용자 결정·타팀 협의 필요)
+## 6. 미해결 — 필수 범위인데 확인·협의 필요 (도전/확장 제외)
 
-**6-1. SO 도착 입고가 "전량·무수량"만 지원** ⚠️
-현재 `PATCH /sales-orders/{soNumber}/receive`는 body가 없고 IN_FULFILLMENT→RECEIVED 전량 전환만. 안내북 M-SCAN-IN/SO-06은 **라인별 도착 수량 + 차이 사유(배송 누락·파손)**를 요구. → sales에 도착 수량/차이를 받는 receive 확장(body 추가) 또는 부분 입고 모델 결정 필요. (안내북상 부분 입고는 "도전 미션"이라 우선순위 협의 대상)
+> 도전·확장 미션(부분 입고/차이 사유, 정비 사용 출고, 미연결 일반 입고)은 이번 범위에서 제외하여 갭에서 뺐다.
+> 이번 범위 기준 receive(전량 도착 확인)·재고 조회·worklog는 모두 엔드포인트가 충족된다. 아래는 **필수 범위에서 남은 확인 항목**만.
 
-**6-2. 정비 사용 출고(M-SCAN-OUT) 엔드포인트 없음** ⏸ 보류로 종결(결정 로그 1)
-inventory에 사용 출고용 REST 없음(`PATCH /stocks/{wh}/{sku}`는 절대값 보정이라 의미 다름). **이번 범위에서 출고 스캔 자체를 보류**하므로 지금은 갭 아님. 추후 재개 시 inventory에 출고(consume) 엔드포인트 신설(body: sku, warehouseCode, quantity, reason, workNumber → MovementType.OUT) 또는 sales 소유 결정 필요.
-
-**6-3. 내 작업 이력 "본인 필터"** ✅ 해소(결정 로그 3)
-StockMovement에 employee 필드가 없는 문제는 **inventory를 안 쓰고 sales `received_by` 필터로 우회**해 해소. 출고 스캔 보류로 worklog가 "받은 SO" 단일 소스라 가능. `GET /api/v1/sales-orders?received_by=` 구현 완료(fcfd88f). inventory 필드 마이그레이션 불필요.
-
-**6-4. 발주 미연결 "일반 입고" 엔드포인트 없음** ⚠️ (낮은 우선순위)
-M-SCAN-IN의 "미연결 시 일반 입고"는 SO도 PO도 아닌 입고. inventory inbound는 Kafka(procurement) 전용, REST 일반 입고 없음. → 모바일은 **SO 연결 입고만 지원**으로 두는 게 현 범위와 정합(일반 입고는 추후).
-
-**6-5. SO 작성 클라이언트 문서 충돌(미해결)** ❗
+**6-1. SO 작성 클라이언트 문서 충돌(미해결)** ❗
 Part 3는 SO-05=웹 전용, Part 2(p90,148)+시드 데이터(SO-2026-0003 "정민수 정비사 모바일 등록")는 모바일 작성 가능 암시. **현재 핸드오프는 "모바일은 SO 작성 안 함(진입 안내만)"으로 설계.** 강사(발주처) 확인 필요 — 만약 모바일 작성을 살려야 하면 M-SCAN 계열에 발주 등록 화면 1장 추가(`POST /api/v1/sales-orders`는 이미 존재하므로 백엔드는 준비됨).
 
-**6-6. 바코드 = SKU 가정** ℹ️
+**6-2. 바코드 = SKU 가정** ℹ️
 item은 SKU 조회만, 바코드 전용 필드·조회 없음. **스캔한 바코드 페이로드를 SKU로 직접 사용**한다는 전제로 설계. 물리 바코드가 SKU와 다른 체계면 매핑 테이블 필요 → 확인.
 
-**6-7. 마이페이지 조회가 internal-snapshot뿐** ℹ️
+**6-3. 마이페이지 조회가 internal-snapshot뿐** ℹ️
 `GET /users/internal/snapshot`은 keycloakSub 파라미터 + 본인 일치 검사를 요구하는 내부용. 깔끔한 `GET /me`는 없음 — JWT의 sub를 그대로 넣어 사용 가능하나 user팀에 모바일용 self 엔드포인트 요청 고려.
