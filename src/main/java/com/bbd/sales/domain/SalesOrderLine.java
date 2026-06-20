@@ -56,11 +56,15 @@ public class SalesOrderLine {
         }
         // quantity 캡은 방어선(1차 방어는 서비스의 shortfall clamp). 초과 시 예외 전환은 #55(재시도 dedup) 이후.
         this.reservedQuantity = Math.min(quantity, this.reservedQuantity + reservedDelta);
-        this.fulfillmentSource = (this.reservedQuantity >= quantity)
-                ? FulfillmentSource.STOCK : FulfillmentSource.BACKORDERED;
+        // fulfillmentSource 는 여기서 파생하지 않는다 — 예약 진행 중엔 미확정(null). 확정 시점(finalizeSource)에 파생.
         if (sourceWarehouseCode != null) {
             this.fromWarehouseCode = sourceWarehouseCode;   // 재고 확보분의 출발지(출고창고) 기록
         }
+    }
+
+    /** 충족 소스 확정(approve/fulfill-backorder 시점). 전량 확보면 STOCK, 부족분 남으면 BACKORDERED(소스 판정은 procurement). */
+    public void finalizeSource() {
+        this.fulfillmentSource = fullyReserved() ? FulfillmentSource.STOCK : FulfillmentSource.BACKORDERED;
     }
 
     /**

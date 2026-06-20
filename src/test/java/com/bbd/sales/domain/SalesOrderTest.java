@@ -185,6 +185,16 @@ class SalesOrderTest {
     }
 
     @Test
+    @DisplayName("reserveLine: 예약 중엔 fulfillmentSource 미확정(null), 확정(confirm) 시 파생")
+    void reserveLine_sourceUndecidedUntilConfirm() {
+        SalesOrder so = submitted();
+        so.reserveLine("SKU-1", 1, "WH-HQ-001"); // 부분 예약
+        assertThat(line(so).fulfillmentSource()).isNull();           // 아직 미확정
+        so.confirmByHq("EMP-hq", NOW);
+        assertThat(line(so).fulfillmentSource()).isEqualTo(FulfillmentSource.BACKORDERED); // 확정 시 파생
+    }
+
+    @Test
     @DisplayName("assertReservable: 비-SUBMITTED/BACKORDERED 또는 미존재 sku면 부작용 없이 throw")
     void assertReservable_guards() {
         assertViolation(() -> requested().assertReservable("SKU-1"), Violation.NOT_DECIDABLE); // 상태 가드

@@ -218,6 +218,7 @@ public class SalesOrder {
         if (!status.canHqDecide()) throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_DECIDABLE); // SUBMITTED만
         this.approvedBy = actor;
         this.approvedAt = now;
+        this.lines.forEach(SalesOrderLine::finalizeSource); // 확정 시점에 라인별 충족소스 파생(예약 중엔 미확정)
         this.status = deriveStatus();   // allMatch(fullyReserved) ? IN_FULFILLMENT : BACKORDERED
     }
 
@@ -226,6 +227,7 @@ public class SalesOrder {
      */
     public void refulfill(LocalDateTime now) {
         if (!status.isBackordered()) throw new SalesOrderStateException(SalesOrderStateException.Violation.NOT_FULFILLABLE); // BACKORDERED만
+        this.lines.forEach(SalesOrderLine::finalizeSource); // 보충분 반영 후 라인별 충족소스 재파생
         this.status = deriveStatus();   // 아직 부족하면 BACKORDERED 유지(멱등 재시도 가능)
     }
 
