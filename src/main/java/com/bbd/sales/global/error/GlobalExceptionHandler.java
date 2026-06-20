@@ -3,6 +3,7 @@ package com.bbd.sales.global.error;
 import com.bbd.sales.domain.CustomerOrderStateException;
 import com.bbd.sales.domain.SalesOrderStateException;
 import com.bbd.sales.global.error.dto.ErrorCode;
+import jakarta.validation.ConstraintViolationException;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.*;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -56,6 +57,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ProblemDetail> handleIllegalArgument(IllegalArgumentException e) {
+        ProblemDetail body = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
+        body.setTitle("BAD_REQUEST");
+        body.setDetail(e.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    /** @Validated 파라미터 제약(@NotBlank 등) 위반 → 400 (미처리 시 500으로 새는 것 방지). */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ProblemDetail> handleConstraintViolation(ConstraintViolationException e) {
         ProblemDetail body = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
         body.setTitle("BAD_REQUEST");
         body.setDetail(e.getMessage());
