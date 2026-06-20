@@ -4,15 +4,19 @@ import com.bbd.sales.adapter.in.web.dto.*;
 import com.bbd.sales.application.port.in.CustomerOrderUseCase;
 import com.bbd.sales.domain.CustomerOrderStatus;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 
 @RestController
 @RequiredArgsConstructor
+@Validated   // @RequestParam 제약(@Min/@Positive) 활성화
 @RequestMapping("/api/v1/customer-orders")
 public class CustomerOrderController {
     private final CustomerOrderUseCase customerOrderUseCase; // service가 자동 주입됨
@@ -26,8 +30,8 @@ public class CustomerOrderController {
             @RequestParam(required = false, name = "requested_by") String requestedBy,
             @RequestParam(required = false, name = "start_date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
             @RequestParam(required = false, name = "end_date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Positive int size
     ) {
         return webMapper.toSummaryPageResponse(
                 customerOrderUseCase.search(webMapper.toSearchQuery(status, dealerWarehouseCode, customerName, requestedBy, startDate, endDate, page, size))
