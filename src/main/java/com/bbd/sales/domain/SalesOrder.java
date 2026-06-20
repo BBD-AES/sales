@@ -205,6 +205,11 @@ public class SalesOrder {
         findUniqueLineBySku(sku); // 없거나 중복이면 throw(적용은 안 함)
     }
 
+    /** 해당 sku 라인의 미충족분(quantity - reservedQuantity). 서비스가 예약 요청을 이만큼으로 clamp 하는 데 쓴다. */
+    public int shortfallFor(String sku) {
+        return findUniqueLineBySku(sku).shortfall();
+    }
+
     /**
      * [확정] approve. 이미 예약된 상태를 '확정'만 한다(reservations 인자 없음 — 예약은 reserveLine이 미리 함).
      * 전 라인 full이면 IN_FULFILLMENT, 부족분 남았으면 BACKORDERED(=사람이 부족 인정하고 확정).

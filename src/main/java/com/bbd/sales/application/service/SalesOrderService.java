@@ -178,12 +178,17 @@ public class SalesOrderService implements SalesOrderUseCase {
         authorizeDecision(user);
         // 0) 외부 예약 호출 전에 도메인 선검증(상태/SKU) → 예약 성공 후 도메인 throw로 inventory 고아 홀드가 남는 것 방지.
         so.assertReservable(cmd.sku());
-        // 1) inventory 예약(동기, 원자) → 실제 잡힌 양. requestId는 프론트가 클릭 시 만든 멱등키.
+        // 1) 요청을 미충족분(shortfall)으로 clamp — 필요수량 초과 예약(inventory 고아 holds) 방지. 이미 충족이면 거부.
+        int shortfall = so.shortfallFor(cmd.sku());
+        if (shortfall <= 0) {
+            throw new ApiException(ErrorCode.SALES_ORDER_LINE_FULLY_RESERVED);
+        }
+        int want = Math.min(cmd.quantity(), shortfall);
+        // 2) inventory 예약(동기, 원자) → 실제 잡힌 양. requestId는 프론트가 클릭 시 만든 멱등키.
         ReservationResult rr = inventoryPort.reserveFromWarehouse(
-                cmd.requestId(), so.soNumber(), cmd.sku(), cmd.warehouseCode(), cmd.quantity());
-        // 2) 실제 잡힌 양만 도메인 라인에 누적(상태 그대로 SUBMITTED).
+                cmd.requestId(), so.soNumber(), cmd.sku(), cmd.warehouseCode(), want);
+        // 3) 실제 잡힌 양만 도메인 라인에 누적(상태 그대로 SUBMITTED).
         //    (주의) 같은 requestId 재요청 시 inventory 멱등 반환을 sales가 또 누적하는 이중계상은 #55(requestId 영속 dedup)로 분리.
-        //    현재는 applyReservation 의 quantity 캡으로 부분 완화.
         so.reserveLine(cmd.sku(), rr.reserved(), cmd.warehouseCode());
         repository.save(so);
         return toResult(so);   // 응답에 라인별 reservedQuantity/부족분 → 사람이 보고 또 예약

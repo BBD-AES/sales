@@ -176,6 +176,15 @@ class SalesOrderTest {
     }
 
     @Test
+    @DisplayName("reserveLine: 음수 예약량은 거부(IllegalArgumentException)")
+    void reserveLine_negativeDelta_throws() {
+        SalesOrder so = submitted();
+        assertThatThrownBy(() -> so.reserveLine("SKU-1", -1, "WH-HQ-001"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("음수");
+    }
+
+    @Test
     @DisplayName("assertReservable: 비-SUBMITTED/BACKORDERED 또는 미존재 sku면 부작용 없이 throw")
     void assertReservable_guards() {
         assertViolation(() -> requested().assertReservable("SKU-1"), Violation.NOT_DECIDABLE); // 상태 가드

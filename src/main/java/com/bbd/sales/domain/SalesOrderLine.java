@@ -51,7 +51,11 @@ public class SalesOrderLine {
      * 예약 반영(가산). 전량 확보면 STOCK, 부족분 남으면 BACKORDERED(소스 판정은 procurement).
      */
     public void applyReservation(int reservedDelta, String sourceWarehouseCode) {
-        this.reservedQuantity = Math.min(quantity, this.reservedQuantity + Math.max(0, reservedDelta));
+        if (reservedDelta < 0) {   // 음수 예약량 = 계약 위반(inventory reserved 는 항상 ≥0) → 조용히 0 클램프 말고 fail-fast
+            throw new IllegalArgumentException("reservedDelta 는 음수일 수 없습니다: " + reservedDelta);
+        }
+        // quantity 캡은 방어선(1차 방어는 서비스의 shortfall clamp). 초과 시 예외 전환은 #55(재시도 dedup) 이후.
+        this.reservedQuantity = Math.min(quantity, this.reservedQuantity + reservedDelta);
         this.fulfillmentSource = (this.reservedQuantity >= quantity)
                 ? FulfillmentSource.STOCK : FulfillmentSource.BACKORDERED;
         if (sourceWarehouseCode != null) {

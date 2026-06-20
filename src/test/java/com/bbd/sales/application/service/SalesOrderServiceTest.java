@@ -192,6 +192,37 @@ class SalesOrderServiceTest {
     }
 
     @Test
+    @DisplayName("reserveLine: 요청이 미충족분보다 크면 shortfall 만큼만 inventory에 요청")
+    void reserveLine_clampsRequestToShortfall() {
+        SalesOrder so = submitted("OIL-FLT-001", 10);
+        so.reserveLine("OIL-FLT-001", 8, "WH-HQ-001"); // 사전 8 예약 → 부족 2
+        when(currentUserProvider.current()).thenReturn(HQ);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+        when(inventoryPort.reserveFromWarehouse("req-2", "SO-1", "OIL-FLT-001", "WH-HQ-002", 2)) // 10 요청해도 2만
+                .thenReturn(new ReservationResult("OIL-FLT-001", 2, 2, "WH-HQ-002"));
+
+        service.reserveLine(new ReserveLineCommand("SO-1", "OIL-FLT-001", "WH-HQ-002", 10, "req-2"));
+
+        assertThat(so.lines().get(0).reservedQuantity()).isEqualTo(10);
+        verify(inventoryPort).reserveFromWarehouse("req-2", "SO-1", "OIL-FLT-001", "WH-HQ-002", 2);
+    }
+
+    @Test
+    @DisplayName("reserveLine: 이미 충족된 라인은 거부 + inventory 호출 안 함")
+    void reserveLine_fullyReserved_rejects() {
+        SalesOrder so = submitted("OIL-FLT-001", 10);
+        so.reserveLine("OIL-FLT-001", 10, "WH-HQ-001"); // 전량 예약 → 부족 0
+        when(currentUserProvider.current()).thenReturn(HQ);
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
+
+        assertThatThrownBy(() -> service.reserveLine(
+                new ReserveLineCommand("SO-1", "OIL-FLT-001", "WH-HQ-002", 5, "req-3")))
+                .isInstanceOf(ApiException.class);
+
+        verify(inventoryPort, never()).reserveFromWarehouse(any(), any(), any(), any(), anyInt());
+    }
+
+    @Test
     @DisplayName("fulfillBackorder: 보충분까지 예약돼 전 라인 full이면 IN_FULFILLMENT")
     void fulfillBackorder_reserved_inFulfillment() {
         SalesOrder so = submitted("RLY-12V-30A-01", 5);
@@ -260,7 +291,7 @@ class SalesOrderServiceTest {
                 .thenReturn(new SalesOrderPage(List.of(), 0L, 0, 20));
         // 지점이 타지점 코드로 필터 시도
         SearchSalesOrderQuery q = new SearchSalesOrderQuery(
-                null, null, "WH-BR-999", null, null, null, 0, 20
+                null, null, "WH-BR-999", null, null, null, null, 0, 20
         );
 
         service.search(q);
@@ -278,7 +309,7 @@ class SalesOrderServiceTest {
         when(repository.search(any(), anyInt(), anyInt()))
                 .thenReturn(new SalesOrderPage(List.of(), 0L, 0, 20));
         SearchSalesOrderQuery q = new SearchSalesOrderQuery(
-                null, null, "WH-BR-002", null, null, null, 0, 20
+                null, null, "WH-BR-002", null, null, null, null, 0, 20
         );
 
         service.search(q);
