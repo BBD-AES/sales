@@ -28,11 +28,11 @@ public class SalesOrderWebMapper {
 
     public SearchSalesOrderQuery toSearchQuery(
             SalesOrderStatus status, SalesOrderPriority priority,
-            String toWarehouseCode, String requestedBy,
+            String toWarehouseCode, String requestedBy, String receivedBy,
             LocalDate startDate, LocalDate endDate,
             int page, int size) {
         return new SearchSalesOrderQuery(
-                status, priority, toWarehouseCode, requestedBy,
+                status, priority, toWarehouseCode, requestedBy, receivedBy,
                 startDate, endDate, page, size);
     }
 

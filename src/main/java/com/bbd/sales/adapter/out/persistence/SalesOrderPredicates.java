@@ -20,6 +20,7 @@ public class SalesOrderPredicates {
         if (c.toWarehouseCode() != null) where.and(so.toWarehouseCode.eq(c.toWarehouseCode()));
         if (c.toWarehouseName() != null) where.and(so.toWarehouseName.eq(c.toWarehouseName()));
         if (c.requestedBy() != null) where.and(so.requestedBy.eq(c.requestedBy()));
+        if (c.receivedBy() != null) where.and(so.receivedBy.eq(c.receivedBy()));
         if (c.from() != null) where.and(so.requestedAt.goe(c.from()));
         if (c.to() != null) where.and(so.requestedAt.loe(c.to()));
         return where;

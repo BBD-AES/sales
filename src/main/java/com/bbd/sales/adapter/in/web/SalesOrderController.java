@@ -44,6 +44,7 @@ public class SalesOrderController {
             @RequestParam(required = false) SalesOrderPriority priority,
             @RequestParam(required = false, name = "to_warehouse_code") String toWarehouseCode,
             @RequestParam(required = false, name = "requested_by") String requestedBy,
+            @RequestParam(required = false, name = "received_by") String receivedBy,
             @RequestParam(required = false, name = "start_date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
             @RequestParam(required = false, name = "end_date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate,
             @RequestParam(defaultValue = "0") int page,
@@ -51,7 +52,7 @@ public class SalesOrderController {
     ) {
         return webMapper.toSummaryPageResponse(
                 salesOrderUseCase.search(webMapper.toSearchQuery(
-                        status, priority, toWarehouseCode, requestedBy,
+                        status, priority, toWarehouseCode, requestedBy, receivedBy,
                         startDate, endDate, page, size)));
     }
 

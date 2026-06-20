@@ -14,6 +14,7 @@ public record SearchSalesOrderQuery(
         SalesOrderPriority priority,
         String toWarehouseCode,
         String requestedBy,
+        String receivedBy,
         LocalDate startDate,
         LocalDate endDate,
         int page,

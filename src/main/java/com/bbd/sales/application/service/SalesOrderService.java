@@ -70,7 +70,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         SalesOrderSearchCriteria criteria = new SalesOrderSearchCriteria(
                 query.status(), query.priority(), codeFilter,
                 nameScope,
-                query.requestedBy(), from, to);
+                query.requestedBy(), query.receivedBy(), from, to);
 
         SalesOrderPage page = repository.search(criteria, query.page(), query.size());
         List<SalesOrderSummaryResult> items = page.content().stream().map(this::toSummary).toList();
