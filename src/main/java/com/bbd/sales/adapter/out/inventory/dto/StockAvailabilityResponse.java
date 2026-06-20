@@ -9,8 +9,6 @@ public record StockAvailabilityResponse(
     public record Warehouse(
             String warehouseCode,
             String warehouseName,
-            int onHand,
-            int reserved,
-            int available
+            int available   // sales는 예약 결정 기준인 available만 사용. inventory가 보내는 onHand/reserved는 무시(fail-on-unknown=false).
     ) {}
 }
