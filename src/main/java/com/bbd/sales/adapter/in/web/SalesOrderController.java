@@ -63,10 +63,11 @@ public class SalesOrderController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public SalesOrderDetailResponse create(
-            @Valid @RequestBody CreateSalesOrderRequest request
+            @Valid @RequestBody CreateSalesOrderRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
     ) {
         return webMapper.toDetailResponse(
-                salesOrderUseCase.create(webMapper.toCreateCommand(request)));
+                salesOrderUseCase.create(webMapper.toCreateCommand(request, idempotencyKey)));
     }
 
     // 조회(상세): 전 직무 허용(지점 본인창고 스코핑은 서비스에서)

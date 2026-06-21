@@ -41,6 +41,7 @@ public class SalesOrderService implements SalesOrderUseCase {
     private final ItemPort itemPort;
     private final WarehousePort warehousePort;
     private final CurrentUserProvider currentUserProvider;
+    private final IdempotencyGuard idempotencyGuard; // #71: 생성 멱등(Idempotency-Key)
 
     // ============================ 조회 ============================
 
@@ -92,6 +93,11 @@ public class SalesOrderService implements SalesOrderUseCase {
     @Override
     public SalesOrderResult create(CreateSalesOrderCommand command) {
         CurrentUser user = currentUserProvider.current();
+        // #71 멱등: 같은 Idempotency-Key 재요청이면 최초 생성된 출고요청을 그대로 반환(중복 생성 방지).
+        var replay = idempotencyGuard.findReplay(IdempotencyGuard.SO_CREATE, user.employeeNumber(), command.idempotencyKey());
+        if (replay.isPresent()) {
+            return toResult(load(replay.get()));
+        }
 
         // 창고명 스냅샷: 생성 시점에 한 번 조회(이후 읽기는 원격 호출 0). 출발지(source)는 sales가 저장 안 함.
         String toName = warehousePort.warehouseName(command.toWarehouseCode());
@@ -118,6 +124,8 @@ public class SalesOrderService implements SalesOrderUseCase {
                 user.employeeNumber(), LocalDateTime.now());
 
         SalesOrder saved = repository.save(so);
+        // #71 멱등: 생성 성공 후 키 기록(동시 같은 키면 409 → @Transactional 롤백, 재시도 시 위 findReplay 가 원본 회수).
+        idempotencyGuard.record(IdempotencyGuard.SO_CREATE, user.employeeNumber(), command.idempotencyKey(), saved.soNumber());
         return toResult(saved);
     }
 

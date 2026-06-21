@@ -30,6 +30,7 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     private final ItemPort itemPort;
     private final WarehousePort warehousePort;
     private final InventoryPort inventoryPort; // #69: CO 종료 시 지점재고 동기 차감
+    private final IdempotencyGuard idempotencyGuard; // #71: 생성 멱등(Idempotency-Key)
     private final CurrentUserProvider currentUserProvider; // 신원은 JWT에서 서버측 취득(컨트롤러 파라미터 아님)
 
     @Override
@@ -85,6 +86,11 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     @Override
     public CustomerOrderResult create(CreateCustomerOrderCommand command) {
         CurrentUser user = currentUserProvider.current();
+        // #71 멱등: 같은 Idempotency-Key 재요청이면 최초 생성된 수주를 그대로 반환(중복 생성 방지).
+        var replay = idempotencyGuard.findReplay(IdempotencyGuard.CO_CREATE, user.employeeNumber(), command.idempotencyKey());
+        if (replay.isPresent()) {
+            return toResult(load(replay.get()));
+        }
         String dealerName = warehousePort.warehouseName(command.dealerWarehouseCode()); // 딜러명 스냅샷
         // 딜러명 미해결(코드 폴백=조회 실패)이면 fail-fast: 코드-as-이름 박제 방지 + 이름축 인가 오작동 방지.
         if (dealerName == null || dealerName.equals(command.dealerWarehouseCode())) {
@@ -99,7 +105,10 @@ public class CustomerOrderService implements CustomerOrderUseCase {
         CustomerOrder co = CustomerOrder.receive(coNumber, command.dealerWarehouseCode(), dealerName, // 생성 규칙은 도메인 생성 메서드에서 검증
                 command.customerName(), command.customerContact(), command.note(),
                 lines, user.employeeNumber(), LocalDateTime.now());
-        return toResult(repository.save(co)); // 저장 후 Result
+        CustomerOrder saved = repository.save(co);
+        // #71 멱등: 생성 성공 후 키 기록(동시 같은 키면 409 → @Transactional 롤백, 재시도 시 위 findReplay 가 원본 회수).
+        idempotencyGuard.record(IdempotencyGuard.CO_CREATE, user.employeeNumber(), command.idempotencyKey(), saved.coNumber());
+        return toResult(saved);
     }
 
     @Override

@@ -36,12 +36,13 @@ public class SalesOrderWebMapper {
                 startDate, endDate, page, size);
     }
 
-    public CreateSalesOrderCommand toCreateCommand(CreateSalesOrderRequest req) {
+    public CreateSalesOrderCommand toCreateCommand(CreateSalesOrderRequest req, String idempotencyKey) {
         return new CreateSalesOrderCommand(
                 req.toWarehouseCode(),
                 req.priority(),
                 req.note(),
-                toLineCommands(req.lines()));
+                toLineCommands(req.lines()),
+                idempotencyKey);
     }
 
     public UpdateSalesOrderCommand toUpdateCommand(String soNumber, UpdateSalesOrderRequest req) {

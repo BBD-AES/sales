@@ -23,8 +23,8 @@ public class CustomerOrderWebMapper {
         );
     }
 
-    public CreateCustomerOrderCommand toCreateCommand(CreateCustomerOrderRequest req) {
-        return new CreateCustomerOrderCommand(req.dealerWarehouseCode(), req.customerName(), req.customerContact(), req.note(), toLineCommands(req.lines()));
+    public CreateCustomerOrderCommand toCreateCommand(CreateCustomerOrderRequest req, String idempotencyKey) {
+        return new CreateCustomerOrderCommand(req.dealerWarehouseCode(), req.customerName(), req.customerContact(), req.note(), toLineCommands(req.lines()), idempotencyKey);
     }
 
     public UpdateCustomerOrderCommand toUpdateCommand(String coNumber, UpdateCustomerOrderRequest req) {
