@@ -2,6 +2,7 @@ package com.bbd.sales.adapter.out.inventory;
 
 import com.bbd.sales.adapter.out.inventory.dto.IssueRequest;
 import com.bbd.sales.adapter.out.inventory.dto.ReserveRequest;
+import com.bbd.sales.adapter.out.inventory.dto.StockOutboundRequest;
 import com.bbd.sales.adapter.out.inventory.dto.ReserveResponse;
 import com.bbd.sales.adapter.out.inventory.dto.StockAvailabilityResponse;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -34,4 +35,8 @@ public interface InventoryStockHttpService {
     // SO 전체 예약 해제(cancel/reject 보상). 멱등.
     @PostExchange("/reservations/release")
     void releaseBySoNumber(@RequestParam("soNumber") String soNumber);
+
+    // #69: 수주 종료 출고 — 지정 창고 재고 차감 + movement OUT. 부족 시 409(차단). (inventory outbound REST — 별도 핸드오프 요청)
+    @PostExchange("/outbound")
+    void outbound(@RequestBody StockOutboundRequest request);
 }

@@ -2,10 +2,13 @@ package com.bbd.sales.adapter.out.inventory;
 
 import com.bbd.sales.adapter.out.inventory.dto.*;
 import com.bbd.sales.application.port.out.*;
+import com.bbd.sales.global.error.ApiException;
+import com.bbd.sales.global.error.dto.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 
 import java.util.List;
 
@@ -83,5 +86,21 @@ public class InventoryRestAdapter implements InventoryPort {
     @Override
     public void release(String soNumber) {
         client.releaseBySoNumber(soNumber);
+    }
+
+    /**
+     * [출고/차감 — 수주 종료] #69. CO close 시 지점 창고 재고를 동기 차감(부족하면 inventory 가 409 → 종료 차단).
+     * 멱등은 referenceNumber(coNumber)로 inventory 가 dedup(핸드오프 요청).
+     */
+    @Override
+    public void shipForCustomerOrder(String coNumber, List<StockOutLine> lines) {
+        var reqLines = lines.stream()
+                .map(l -> new StockOutboundRequest.Line(l.sku(), l.quantity(), l.warehouseCode(), l.unitPrice()))
+                .toList();
+        try {
+            client.outbound(new StockOutboundRequest(coNumber, reqLines));
+        } catch (HttpClientErrorException.Conflict e) {
+            throw new ApiException(ErrorCode.CUSTOMER_ORDER_STOCK_INSUFFICIENT); // 지점재고 부족 → 종료 차단
+        }
     }
 }

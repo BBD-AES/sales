@@ -16,4 +16,7 @@ public interface InventoryPort {
     void transferForSalesOrderReceive(String soNumber, String destinationWarehouseCode, String issuerId, List<StockTransferLine> lines);
     // cancel/reject 시 예약 해제
     void release(String soNumber);
+
+    // #69: 수주(CO) 종료 시 지점재고 동기 차감(부족 시 예외 = 차단). referenceNumber=coNumber, lines 에 지점 창고코드.
+    void shipForCustomerOrder(String coNumber, List<StockOutLine> lines);
 }

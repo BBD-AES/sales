@@ -33,6 +33,7 @@ public enum ErrorCode {
     CUSTOMER_ORDER_NOT_CONFIRMABLE(HttpStatus.CONFLICT, "CO004", "OPEN 상태의 수주만 확정할 수 있습니다."),
     CUSTOMER_ORDER_NOT_CANCELABLE(HttpStatus.CONFLICT, "CO005", "OPEN 또는 CONFIRMED 상태에서만 취소할 수 있습니다."),
     CUSTOMER_ORDER_NOT_CLOSABLE(HttpStatus.CONFLICT, "CO006", "CONFIRMED 상태의 수주만 종료할 수 있습니다."),
+    CUSTOMER_ORDER_STOCK_INSUFFICIENT(HttpStatus.CONFLICT, "CO007", "지점 재고가 부족하여 수주를 종료할 수 없습니다."),
 
     ITEM_NOT_ORDERABLE(HttpStatus.BAD_REQUEST, "ITEM001", "주문할 수 없는 상품(SKU)이 포함되어 있습니다."),
     ITEM_NOT_FOUND(HttpStatus.BAD_REQUEST, "ITEM002", "존재하지 않는 상품(SKU)입니다."),

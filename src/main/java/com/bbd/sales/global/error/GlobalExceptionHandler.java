@@ -10,6 +10,7 @@ import org.springframework.http.*;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
@@ -83,6 +84,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         body.setTitle("CONFLICT");
         body.setDetail("다른 처리와 동시 충돌로 일시적으로 실패했습니다. 잠시 후 다시 시도해 주세요.");
         return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
+    /**
+     * #69: 다운스트림(inventory/item/...) HTTP 실패(미배포 404 / 5xx / 타임아웃·연결거부)가 raw 500 으로 새는 것 방지.
+     * '재고 부족'(어댑터가 409→CO007 로 변환)과 구분되는 '업스트림 일시 장애' → 503. (어댑터에서 자체 처리한 경우는 여기 안 옴)
+     */
+    @ExceptionHandler(RestClientException.class)
+    public ResponseEntity<ProblemDetail> handleDownstreamUnavailable(RestClientException e) {
+        ProblemDetail body = ProblemDetail.forStatus(HttpStatus.SERVICE_UNAVAILABLE);
+        body.setTitle("SERVICE_UNAVAILABLE");
+        body.setDetail("연동 서비스가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도해 주세요.");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(body);
     }
 
     @Override
