@@ -373,6 +373,6 @@ public class SalesOrderService implements SalesOrderUseCase {
                 so.status(), so.priority(),
                 so.requestedBy(), so.approvedBy(), so.receivedBy(), so.canceledBy(),
                 so.requestedAt(), so.approvedAt(), so.receivedAt(), so.canceledAt(),
-                so.totalAmount(), so.note());
+                so.totalAmount(), so.itemCount(), so.totalQuantity(), so.note());
     }
 }

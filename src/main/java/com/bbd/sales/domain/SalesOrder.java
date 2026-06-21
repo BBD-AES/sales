@@ -290,6 +290,16 @@ public class SalesOrder {
         return lines.stream().map(SalesOrderLine::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /** 목록 카드용: 주문 라인(품목) 수. lines 는 요약 경로에서 이미 로드돼 추가 쿼리 없음(#67). */
+    public int itemCount() {
+        return lines.size();
+    }
+
+    /** 목록 카드용: 전 라인 수량 합(#67). */
+    public int totalQuantity() {
+        return lines.stream().mapToInt(SalesOrderLine::quantity).sum();
+    }
+
     /** 본인 소속 창고(요청 지점) 자원인지 판단 키. */
     public boolean ownedByWarehouse(String warehouseCode) {
         return toWarehouseCode.equals(warehouseCode);
