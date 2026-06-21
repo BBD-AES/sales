@@ -17,7 +17,7 @@ public class OutboxEvent {
     private Long id;
     private String aggregateType; // "SalesOrder"
     private String aggregateId; // soNumber (= Kafka 파티션 키)
-    private String eventType; // "submitted"(SalesOrder 내부 알림) / "PURCHASE_REQUESTED"(구매요청 계약 이벤트)
+    private String eventType; // "received"(출고 통지→inventory) / "PURCHASE_REQUESTED"(구매요청 계약). submit 자가알림은 #65로 in-process 강등→outbox 미적재
     private String topic; // 발행 대상 Kafka 토픽 — 토픽이 여러 개라 폴러가 행만 보고 발행처를 안다(계약서 §6)
 
     @Column(columnDefinition = "text")

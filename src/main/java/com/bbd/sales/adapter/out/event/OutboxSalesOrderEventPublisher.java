@@ -17,8 +17,9 @@ import java.util.UUID;
  * SalesOrderEventPublisher 포트 구현.
  *  - publishReceived → 교차서비스(→inventory) 이벤트라 Kafka outbox 에 적재(트랜잭셔널 아웃박스, at-least-once).
  *  - publishSubmitted → #65: 자가알림(sales→sales, 타 서비스 미구독)이라 Kafka 가 아닌 in-process Spring 이벤트로 발행한다.
- *    HqNotificationListener(@EventListener, 동기)가 submit() 트랜잭션 안에서 받아 알림을 '제출과 원자적으로' 생성 → 브로커 비의존.
- *    원칙: 교차서비스=Kafka(EDA), 서비스 내부=in-process.
+ *    HqNotificationListener(@TransactionalEventListener AFTER_COMMIT)가 submit 커밋 후 best-effort 로 알림을 생성한다 →
+ *    브로커 비의존 + 핵심 전이 비차단(알림 실패가 submit 을 롤백시키지 않음).
+ *    원칙: 교차서비스=Kafka(EDA), 서비스 내부=in-process, 알림은 비핵심 read-model(best-effort).
  */
 @Component
 @RequiredArgsConstructor
@@ -30,7 +31,7 @@ public class OutboxSalesOrderEventPublisher implements SalesOrderEventPublisher 
 
     @Override
     public void publishSubmitted(String soNumber) {
-        // #65: 내부 전용 알림 → Kafka outbox 대신 in-process 이벤트(동기 @EventListener). submit() 트랜잭션 안에서 알림이 원자적으로 생성됨.
+        // #65: 내부 전용 알림 → Kafka outbox 대신 in-process 이벤트. 리스너가 submit 커밋 후(AFTER_COMMIT) best-effort 로 생성(핵심 전이 비차단).
         events.publishEvent(new SalesOrderSubmittedEvent(soNumber, UUID.randomUUID().toString()));
     }
 
