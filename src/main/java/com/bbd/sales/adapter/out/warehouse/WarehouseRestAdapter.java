@@ -4,7 +4,6 @@ import com.bbd.sales.adapter.out.warehouse.dto.WarehouseResponse;
 import com.bbd.sales.application.port.out.WarehousePort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
 
@@ -13,8 +12,7 @@ import org.springframework.web.client.RestClientException;
  * 서비스는 WarehousePort만 알고, 이게 inventory를 실제로 호출하는 일을 담당.
  * 창고명은 '표시용 스냅샷'(비핵심)이라 실패해도 주문을 막지 않고 코드로 폴백한다.
  */
-@Primary // WarehouseStubAdapter보다 우선해서 주입됨
-@Component
+@Component // #40: WarehouseStubAdapter 제거로 WarehousePort 단일 구현 → @Primary 불필요
 @RequiredArgsConstructor
 @Slf4j
 public class WarehouseRestAdapter implements WarehousePort {
