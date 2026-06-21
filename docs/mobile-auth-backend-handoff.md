@@ -15,7 +15,7 @@
 ## 현재 구조 — 왜 추가 작업이 거의 없나
 
 **게이트웨이 = dual security chain** (`security-gateway/config/SecurityConfig.java`)
-- `@Order(1) bearerTokenSecurityFilterChain` — `Authorization: Bearer ` 헤더가 있는 요청만 `securityMatcher`로 선점(`:66-80`) → **STATELESS**(`:91-92`) + CSRF off(`:89`) + `oauth2ResourceServer().jwt()`(`:111-113`)로 Keycloak JWT 검증.
+- `@Order(1) bearerTokenSecurityFilterChain` — `Authorization: Bearer` 헤더가 있는 요청만 `securityMatcher`로 선점(`:66-80`) → **STATELESS**(`:91-92`) + CSRF off(`:89`) + `oauth2ResourceServer().jwt()`(`:111-113`)로 Keycloak JWT 검증.
 - `@Order(2) webSecurityFilterChain` — 그 외 브라우저 요청은 `oauth2Login` + JSESSIONID 세션(`:119-164`).
 - → **세션 전용이 아니라 세션+Bearer 둘 다 이미 구현돼 있음.** 모바일 Bearer는 자동으로 (1)번 체인으로 처리됨.
 
@@ -34,6 +34,7 @@
 ## 해야 할 일
 
 ### 🔴 필수 (1건) — Keycloak 모바일 클라이언트 생성
+
 | 항목 | 값 |
 |---|---|
 | 위치 | Keycloak Admin Console, realm **`bbd`** (`https://bbd-keycloak.inwoohub.com`) — 레포에 realm export 없음(외부 호스팅) |

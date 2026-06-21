@@ -25,6 +25,7 @@ CAPS에 `createSo`/`createCo` 플래그가 없어 작성 버튼이 권한 게이
 - 표 행 선택 **키보드 지원**(role=button·tabIndex·Enter), 슬라이드오버 **포커스 트랩**+초기 포커스, SkuPicker **↑↓/Enter**, 아이콘 버튼 aria-label.
 
 ## 우선순위
+
 | P | 항목 |
 |---|---|
 | P1 | 3 SO/CO 작성 버튼 권한(라이브 403) · 1 withdraw · 2 ADJUST 유형 |
