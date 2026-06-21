@@ -6,6 +6,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -54,6 +55,7 @@ public class CustomerOrderJpaEntity {
     // Setter 없이 컬렉션 변경은 replaceLines()로만 하도록 강제
     @Setter(AccessLevel.NONE)
     @OneToMany(mappedBy = "customerOrder", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 100) // #36: 목록 N행의 lines 를 IN 배치로 일괄 로드 → N+1 제거(페이징 SQL 불변, 인메모리 페이징 함정 없음)
     private List<CustomerOrderLineJpaEntity> lines = new ArrayList<>();
 
     /**
