@@ -104,7 +104,7 @@ public class SalesOrderWebMapper {
                 r.status(), r.priority(),
                 r.requestedBy(), r.approvedBy(), r.receivedBy(), r.canceledBy(),
                 r.requestedAt(), r.approvedAt(), r.receivedAt(), r.canceledAt(),
-                r.totalAmount(), r.note());
+                r.totalAmount(), r.itemCount(), r.totalQuantity(), r.note());
     }
 
     private SalesOrderLineResponse toLineResponse(SalesOrderLineResult r) {
