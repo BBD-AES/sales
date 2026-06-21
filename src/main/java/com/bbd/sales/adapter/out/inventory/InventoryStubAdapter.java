@@ -2,6 +2,7 @@ package com.bbd.sales.adapter.out.inventory;
 
 import com.bbd.sales.application.port.out.InventoryPort;
 import com.bbd.sales.application.port.out.ReservationResult;
+import com.bbd.sales.application.port.out.StockOutLine;
 import com.bbd.sales.application.port.out.StockTransferLine;
 import com.bbd.sales.application.port.out.WarehouseStock;
 import lombok.extern.slf4j.Slf4j;
@@ -62,5 +63,11 @@ public class InventoryStubAdapter implements InventoryPort {
     @Override
     public void release(String soNumber) {
 
+    }
+
+    @Override
+    public void shipForCustomerOrder(String coNumber, List<StockOutLine> lines) {
+        // 데모/로컬: 실연동 전엔 차감 없이 성공(no-op). rest 모드에서 inventory 가 실제 차감/부족 판정.
+        log.info("[InventoryStub] 수주 출고(데모 no-op) co={}, lines={}", coNumber, lines);
     }
 }

@@ -8,8 +8,10 @@ import com.bbd.sales.application.port.out.CurrentUserProvider;
 import com.bbd.sales.application.port.out.CustomerOrderPage;
 import com.bbd.sales.application.port.out.CustomerOrderRepository;
 import com.bbd.sales.application.port.out.CustomerOrderSearchCriteria;
+import com.bbd.sales.application.port.out.InventoryPort;
 import com.bbd.sales.application.port.out.ItemPort;
 import com.bbd.sales.application.port.out.ProductSnapshot;
+import com.bbd.sales.application.port.out.StockOutLine;
 import com.bbd.sales.application.port.out.WarehousePort;
 import com.bbd.sales.application.result.CustomerOrderResult;
 import com.bbd.sales.application.result.CustomerOrderStatusChangeResult;
@@ -38,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -54,6 +57,7 @@ class CustomerOrderServiceTest {
     @Mock CustomerOrderRepository repository;
     @Mock ItemPort itemPort;
     @Mock WarehousePort warehousePort;
+    @Mock InventoryPort inventoryPort;
     @Mock CurrentUserProvider currentUserProvider;
 
     @InjectMocks CustomerOrderService service;
@@ -361,6 +365,15 @@ class CustomerOrderServiceTest {
         assertThat(co.status()).isEqualTo(CustomerOrderStatus.CLOSED);
         assertThat(co.closedBy()).isEqualTo("BR003");
         verify(repository).save(co);
+        // #69: 종료 시 지점재고 차감 호출 + 라인 매핑 검증(warehouseCode=dealerWarehouseCode, qty/단가 스냅샷)
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<StockOutLine>> linesCap = ArgumentCaptor.forClass(List.class);
+        verify(inventoryPort).shipForCustomerOrder(eq("CO-2026-0001"), linesCap.capture());
+        StockOutLine outLine = linesCap.getValue().get(0);
+        assertThat(outLine.sku()).isEqualTo("OIL-FLT-001");
+        assertThat(outLine.quantity()).isEqualTo(2);
+        assertThat(outLine.warehouseCode()).isEqualTo(WH);   // = dealerWarehouseCode
+        assertThat(outLine.unitPrice()).isEqualTo(1000);     // unitPriceSnapshot 정수부
         assertThat(result.status()).isEqualTo(CustomerOrderStatus.CLOSED);
         assertThat(result.changedAt()).isEqualTo(co.closedAt());
     }
@@ -379,6 +392,25 @@ class CustomerOrderServiceTest {
 
         assertThat(co.status()).isEqualTo(CustomerOrderStatus.OPEN);
         verify(repository, never()).save(any());
+        verify(inventoryPort, never()).shipForCustomerOrder(any(), any()); // 도메인 검증 실패 → 차감 호출 전 차단
+    }
+
+    @Test
+    @DisplayName("close: 지점재고 부족(inventory 차단)이면 CO007 전파 + 저장 안 함(#69)")
+    void close_insufficientStock_blocks() {
+        CustomerOrder co = open("CO-2026-0001");
+        co.confirm("BR003", NOW); // CONFIRMED 선행
+        when(currentUserProvider.current()).thenReturn(BRANCH);
+        when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(co));
+        doThrow(new ApiException(ErrorCode.CUSTOMER_ORDER_STOCK_INSUFFICIENT))
+                .when(inventoryPort).shipForCustomerOrder(eq("CO-2026-0001"), anyList());
+
+        assertThatThrownBy(() -> service.close("CO-2026-0001"))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.CUSTOMER_ORDER_STOCK_INSUFFICIENT);
+
+        verify(repository, never()).save(any()); // 차감 실패 → 종료(저장) 안 됨
     }
 
     @Test

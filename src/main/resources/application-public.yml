@@ -60,6 +60,9 @@ spring:
         jwt:
           issuer-uri: ${KEYCLOAK_ISSUER_URI}
   http:
+    client:                         # #69: 다운스트림 호출 타임아웃 — inventory 등이 hang 시 (트랜잭션 내 호출이라) DB 커넥션 무한 점유 방지
+      connect-timeout: 2s
+      read-timeout: 3s
     serviceclient:
       bbd-user-service:
         base-url: ${USER_SERVICE_BASE_URL:http://localhost:8081/user}

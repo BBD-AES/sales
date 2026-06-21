@@ -29,6 +29,7 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     private final CustomerOrderRepository repository; // 구현(JPA어댑터)은 모르는 채로,out 포트(인터페이스)에만 의존
     private final ItemPort itemPort;
     private final WarehousePort warehousePort;
+    private final InventoryPort inventoryPort; // #69: CO 종료 시 지점재고 동기 차감
     private final CurrentUserProvider currentUserProvider; // 신원은 JWT에서 서버측 취득(컨트롤러 파라미터 아님)
 
     @Override
@@ -136,9 +137,23 @@ public class CustomerOrderService implements CustomerOrderUseCase {
         CurrentUser currentUser = currentUserProvider.current();
         CustomerOrder co = load(coNumber);
         authorizeOwnerWrite(co, currentUser);
-        co.close(currentUser.employeeNumber(), LocalDateTime.now());
+        co.close(currentUser.employeeNumber(), LocalDateTime.now()); // CONFIRMED→CLOSED 검증·전이(비CONFIRMED 면 NOT_CLOSABLE)
+        // #69: 종료 = 고객 인도 = 지점재고 물리 차감. inventory 동기 호출 → 부족 시 예외 → @Transactional 롤백(save 미호출) → 종료 안 됨.
+        //  재고는 sync 원칙(예약과 동일 TOCTOU; 지점재고는 HQ 예약과 공유 자원이라 async 면 오버셀).
+        // [동시성/멱등] close 에 비관락을 '안' 건다 — 외부효과가 동기 REST 라, 락을 걸면 #55 가 reserveLine 에서 제거한 '락-중-네트워크IO'를
+        //   재도입한다. 동시 close 2건/재시도의 이중 차감은 inventory 의 referenceNumber(=coNumber) '레이스세이프 dedup'(핸드오프 필수)이 막는다
+        //   — reserveLine 의 requestId dedup 과 동일 모델. (HTTP read-timeout 으로 hang 시 커넥션 점유도 상한.)
+        // [잔여] 차감 성공 후 로컬 save/commit 실패 시 orphan 차감 가능 — 위 dedup 으로 재시도가 안전(이중 차감 없음). 보상/리컨실은 후속.
+        inventoryPort.shipForCustomerOrder(co.coNumber(), toStockOutLines(co));
         repository.save(co);
         return statusChange(co, currentUser.employeeNumber(), co.closedAt());
+    }
+
+    // #69: CO 라인 → inventory 출고 라인(지점 창고 = dealerWarehouseCode, 단가는 스냅샷 정수부).
+    private List<StockOutLine> toStockOutLines(CustomerOrder co) {
+        return co.lines().stream()
+                .map(l -> new StockOutLine(l.sku(), l.quantity(), co.dealerWarehouseCode(), l.unitPriceSnapshot().intValue()))
+                .toList();
     }
 
     // 공통 조회 + 404
