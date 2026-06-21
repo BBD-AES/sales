@@ -1,44 +1,28 @@
 package com.bbd.sales.notification;
 
-import com.bbd.sales.adapter.out.event.SalesOrderEventMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
-import tools.jackson.databind.ObjectMapper;
 
 /**
- * 헥사고날에서 위치: in-adapter(Kafka 구동)
- * 필요성: 이벤트를 받아 알림 유스케이스 트리거
+ * 헥사고날 위치: in-adapter(in-process 이벤트 구동).
+ * #65: submit 자가알림을 Kafka 가 아닌 in-process Spring 이벤트로 수신한다(브로커 비의존).
+ * {@code @EventListener}(동기)라 submit()의 @Transactional 안에서 실행 → 알림이 '제출과 원자적으로' 커밋된다
+ * (알림 저장 실패 시 submit 도 롤백). in-process 는 1회 발행이라 JSON 역직렬화·eventId 멱등 dedup 이 불필요하다.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class HqNotificationListener {
     private final NotificationRepository notifications;
-    private final ObjectMapper objectMapper;
 
-    @KafkaListener(topics = "sales.order.submitted", groupId = "sales-hq-notification")
-    public void onSubmitted(String message) throws Exception {
-        /**
-         * SalesOrderEventMessage.class = SalesOrderEventMessage라는 타입의 런타임 표현(Class 객체)
-         * : "클래스 리터럴"이라고 함. 모든 자바 클래스는 메타데이터를 가지고 있고, 그 메타 데이터객체를 값으로 꺼내는 문법임.
-         * Jackson에게 JSON을 읽어서 이 틀(record)에 맞춰서 객체를 찍어내라고 지시함.
-         */
-        SalesOrderEventMessage ev = objectMapper.readValue(message, SalesOrderEventMessage.class);
-        if (notifications.existsByEventId(ev.eventId())) {
-            return; // 이미 처리한 이벤트 -> 멱등 무시(재배달 대비)
-        }
-        try {
-            notifications.save(new Notification(
-                    "HQ_MANAGER", ev.soNumber(),
-                    "출고요청 " + ev.soNumber() + " 본사 검토 대기", ev.eventId()
-            ));
-            log.info("[notify] HQ 알림 생성 so={}", ev.soNumber());
-        } catch (DataIntegrityViolationException dup) {
-            // 동시 소비 레이스: eventId unique 제약 위반 = 이미 처리됨 -> 멱등 처리(정상 종료)
-            log.debug("[notify] 중복 이벤트 무시 eventId={}", ev.eventId());
-        }
+    @EventListener
+    public void onSubmitted(SalesOrderSubmittedEvent ev) {
+        notifications.save(new Notification(
+                "HQ_MANAGER", ev.soNumber(),
+                "출고요청 " + ev.soNumber() + " 본사 검토 대기", ev.eventId()
+        ));
+        log.info("[notify] HQ 알림 생성 so={}", ev.soNumber());
     }
 }
