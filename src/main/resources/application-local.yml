@@ -47,7 +47,8 @@ spring:
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
     consumer:
-      group-id: ${KAFKA_CONSUMER_GROUP_ID:sales-hq-notification}
+      # 각 @KafkaListener가 groupId 명시 → 이 전역 기본값은 fallback(현재 미사용). #65로 옛 sales-hq-notification 제거.
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:sales}
       auto-offset-reset: ${KAFKA_OFFSET_RESET:earliest}
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer

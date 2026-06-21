@@ -1,44 +1,40 @@
 package com.bbd.sales.notification;
 
-import com.bbd.sales.adapter.out.event.SalesOrderEventMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import tools.jackson.databind.ObjectMapper;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * 헥사고날에서 위치: in-adapter(Kafka 구동)
- * 필요성: 이벤트를 받아 알림 유스케이스 트리거
+ * 헥사고날 위치: in-adapter(in-process 이벤트 구동).
+ * #65: submit 자가알림을 Kafka 가 아닌 in-process Spring 이벤트로 수신한다(브로커 비의존).
+ *
+ * <p><b>핵심 전이와 분리(best-effort)</b>: {@code @TransactionalEventListener(AFTER_COMMIT)} 로 submit 커밋 '이후',
+ * {@code REQUIRES_NEW}(새 트랜잭션)에서 알림을 만든다. 알림 저장이 실패해도 이미 커밋된 submit 을 롤백시키지 않는다.
+ * (프로젝트 원칙: 돈/재고만 sync, 알림은 비핵심 read-model — 비핵심 부수효과가 핵심 상태전이를 차단하면 안 됨.)
+ * submit 트랜잭션이 롤백되면 AFTER_COMMIT 이 발화하지 않아 알림도 안 생긴다(올바름). in-process 1회 발화라 dedup/JSON 불필요.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class HqNotificationListener {
     private final NotificationRepository notifications;
-    private final ObjectMapper objectMapper;
 
-    @KafkaListener(topics = "sales.order.submitted", groupId = "sales-hq-notification")
-    public void onSubmitted(String message) throws Exception {
-        /**
-         * SalesOrderEventMessage.class = SalesOrderEventMessage라는 타입의 런타임 표현(Class 객체)
-         * : "클래스 리터럴"이라고 함. 모든 자바 클래스는 메타데이터를 가지고 있고, 그 메타 데이터객체를 값으로 꺼내는 문법임.
-         * Jackson에게 JSON을 읽어서 이 틀(record)에 맞춰서 객체를 찍어내라고 지시함.
-         */
-        SalesOrderEventMessage ev = objectMapper.readValue(message, SalesOrderEventMessage.class);
-        if (notifications.existsByEventId(ev.eventId())) {
-            return; // 이미 처리한 이벤트 -> 멱등 무시(재배달 대비)
-        }
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onSubmitted(SalesOrderSubmittedEvent ev) {
         try {
             notifications.save(new Notification(
                     "HQ_MANAGER", ev.soNumber(),
                     "출고요청 " + ev.soNumber() + " 본사 검토 대기", ev.eventId()
             ));
             log.info("[notify] HQ 알림 생성 so={}", ev.soNumber());
-        } catch (DataIntegrityViolationException dup) {
-            // 동시 소비 레이스: eventId unique 제약 위반 = 이미 처리됨 -> 멱등 처리(정상 종료)
-            log.debug("[notify] 중복 이벤트 무시 eventId={}", ev.eventId());
+        } catch (RuntimeException e) {
+            // best-effort: 알림 실패가 '이미 커밋된' 제출에 영향 주지 않도록 삼킨다(비핵심 read-model).
+            log.warn("[notify] HQ 알림 생성 실패(무시) so={}", ev.soNumber(), e);
         }
     }
 }

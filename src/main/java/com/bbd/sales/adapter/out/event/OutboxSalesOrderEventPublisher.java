@@ -3,7 +3,9 @@ package com.bbd.sales.adapter.out.event;
 import com.bbd.sales.application.port.out.SalesOrderEventPublisher;
 import com.bbd.sales.global.error.ApiException;
 import com.bbd.sales.global.error.dto.ErrorCode;
+import com.bbd.sales.notification.SalesOrderSubmittedEvent;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -12,7 +14,12 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * 헥사고날에서 필요성: 포트를 "outbox 테이블에 같은 트랜잭션으로 INSERT"하게 구현
+ * SalesOrderEventPublisher 포트 구현.
+ *  - publishReceived → 교차서비스(→inventory) 이벤트라 Kafka outbox 에 적재(트랜잭셔널 아웃박스, at-least-once).
+ *  - publishSubmitted → #65: 자가알림(sales→sales, 타 서비스 미구독)이라 Kafka 가 아닌 in-process Spring 이벤트로 발행한다.
+ *    HqNotificationListener(@TransactionalEventListener AFTER_COMMIT)가 submit 커밋 후 best-effort 로 알림을 생성한다 →
+ *    브로커 비의존 + 핵심 전이 비차단(알림 실패가 submit 을 롤백시키지 않음).
+ *    원칙: 교차서비스=Kafka(EDA), 서비스 내부=in-process, 알림은 비핵심 read-model(best-effort).
  */
 @Component
 @RequiredArgsConstructor
@@ -20,10 +27,12 @@ public class OutboxSalesOrderEventPublisher implements SalesOrderEventPublisher 
 
     private final OutboxRepository outbox;
     private final ObjectMapper objectMapper; // Boot 자동 구성 빈
+    private final ApplicationEventPublisher events; // #65: 자가알림 in-process 발행
 
     @Override
     public void publishSubmitted(String soNumber) {
-        enqueue("submitted", soNumber);
+        // #65: 내부 전용 알림 → Kafka outbox 대신 in-process 이벤트. 리스너가 submit 커밋 후(AFTER_COMMIT) best-effort 로 생성(핵심 전이 비차단).
+        events.publishEvent(new SalesOrderSubmittedEvent(soNumber, UUID.randomUUID().toString()));
     }
 
     @Override
