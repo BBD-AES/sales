@@ -96,7 +96,9 @@ public class SalesOrderService implements SalesOrderUseCase {
         // #71 멱등: 같은 Idempotency-Key 재요청이면 최초 생성된 출고요청을 그대로 반환(중복 생성 방지).
         var replay = idempotencyGuard.findReplay(IdempotencyGuard.SO_CREATE, user.employeeNumber(), command.idempotencyKey());
         if (replay.isPresent()) {
-            return toResult(load(replay.get()));
+            SalesOrder existing = load(replay.get());
+            authorizeOwnerWrite(existing, user); // 재요청도 정상 생성과 동일한 소유권 가드(스코프 변경 시 일관 차단)
+            return toResult(existing);
         }
 
         // 창고명 스냅샷: 생성 시점에 한 번 조회(이후 읽기는 원격 호출 0). 출발지(source)는 sales가 저장 안 함.

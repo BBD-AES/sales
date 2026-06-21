@@ -89,7 +89,9 @@ public class CustomerOrderService implements CustomerOrderUseCase {
         // #71 멱등: 같은 Idempotency-Key 재요청이면 최초 생성된 수주를 그대로 반환(중복 생성 방지).
         var replay = idempotencyGuard.findReplay(IdempotencyGuard.CO_CREATE, user.employeeNumber(), command.idempotencyKey());
         if (replay.isPresent()) {
-            return toResult(load(replay.get()));
+            CustomerOrder existing = load(replay.get());
+            authorizeOwnerWrite(existing, user); // 재요청도 정상 생성과 동일한 소유권 가드(스코프 변경 시 일관 차단)
+            return toResult(existing);
         }
         String dealerName = warehousePort.warehouseName(command.dealerWarehouseCode()); // 딜러명 스냅샷
         // 딜러명 미해결(코드 폴백=조회 실패)이면 fail-fast: 코드-as-이름 박제 방지 + 이름축 인가 오작동 방지.

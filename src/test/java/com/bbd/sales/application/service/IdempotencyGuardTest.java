@@ -61,12 +61,21 @@ class IdempotencyGuardTest {
     }
 
     @Test
-    @DisplayName("record: UNIQUE 충돌(DataIntegrityViolation) → 409(IDEM001)")
+    @DisplayName("record: uk_idempotency_key UNIQUE 충돌 → 409(IDEM001)")
     void record_uniqueViolation_mappedToConflict() {
-        doThrow(new DataIntegrityViolationException("dup"))
+        doThrow(new DataIntegrityViolationException("could not execute statement; constraint [uk_idempotency_key]"))
                 .when(port).record("k1", "CO_CREATE", "BR001", "CO-2026-0001");
         assertThatThrownBy(() -> guard.record("CO_CREATE", "BR001", "k1", "CO-2026-0001"))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.IDEMPOTENCY_KEY_CONFLICT);
+    }
+
+    @Test
+    @DisplayName("record: 무관한 무결성 위반은 IDEM001로 가리지 않고 그대로 전파")
+    void record_unrelatedViolation_rethrown() {
+        doThrow(new DataIntegrityViolationException("null value in column \"requester\" violates not-null constraint"))
+                .when(port).record("k1", "CO_CREATE", "BR001", "CO-2026-0001");
+        assertThatThrownBy(() -> guard.record("CO_CREATE", "BR001", "k1", "CO-2026-0001"))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 }

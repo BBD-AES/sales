@@ -8,6 +8,7 @@ import com.bbd.securitycore.domain.UserRole;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -52,7 +53,7 @@ public class CustomerOrderController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public CustomerOrderDetailResponse create(@Valid @RequestBody CreateCustomerOrderRequest request,
-                                              @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+                                              @RequestHeader(value = "Idempotency-Key", required = false) @Size(max = 200) String idempotencyKey) {
         return webMapper.toDetailResponse(customerOrderUseCase.create(webMapper.toCreateCommand(request, idempotencyKey)));
     }
 

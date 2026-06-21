@@ -19,6 +19,7 @@ public class IdempotencyGuard {
 
     public static final String CO_CREATE = "CO_CREATE";
     public static final String SO_CREATE = "SO_CREATE";
+    private static final String UNIQUE_CONSTRAINT = "uk_idempotency_key";
 
     private final IdempotencyPort port;
 
@@ -48,7 +49,21 @@ public class IdempotencyGuard {
         try {
             port.record(idempotencyKey, scope, requester, resourceNumber);
         } catch (DataIntegrityViolationException e) {
-            throw new ApiException(ErrorCode.IDEMPOTENCY_KEY_CONFLICT);
+            // uk_idempotency_key UNIQUE 충돌(동시 같은 키)만 409. 그 외 무결성 위반은 진짜 결함 → 가리지 말고 전파.
+            if (isDuplicateIdempotencyKey(e)) {
+                throw new ApiException(ErrorCode.IDEMPOTENCY_KEY_CONFLICT);
+            }
+            throw e;
         }
+    }
+
+    private boolean isDuplicateIdempotencyKey(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            String msg = t.getMessage();
+            if (msg != null && msg.toLowerCase().contains(UNIQUE_CONSTRAINT)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -64,7 +65,7 @@ public class SalesOrderController {
     @ResponseStatus(HttpStatus.CREATED)
     public SalesOrderDetailResponse create(
             @Valid @RequestBody CreateSalesOrderRequest request,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
+            @RequestHeader(value = "Idempotency-Key", required = false) @Size(max = 200) String idempotencyKey
     ) {
         return webMapper.toDetailResponse(
                 salesOrderUseCase.create(webMapper.toCreateCommand(request, idempotencyKey)));
