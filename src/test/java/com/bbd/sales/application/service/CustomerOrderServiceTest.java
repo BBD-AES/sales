@@ -27,6 +27,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -374,6 +375,11 @@ class CustomerOrderServiceTest {
         assertThat(outLine.quantity()).isEqualTo(2);
         assertThat(outLine.warehouseCode()).isEqualTo(WH);   // = dealerWarehouseCode
         assertThat(outLine.unitPrice()).isEqualTo(1000);     // unitPriceSnapshot 정수부
+        // #69: ship-before-save 순서 보장 — 차감 실패 시 저장(종료) 차단 설계가 호출 순서에 의존.
+        //      역전(save 먼저→ship)되면 부족인데도 CLOSED 가 커밋되므로 InOrder 로 회귀를 잠금.
+        InOrder order = inOrder(inventoryPort, repository);
+        order.verify(inventoryPort).shipForCustomerOrder(eq("CO-2026-0001"), anyList());
+        order.verify(repository).save(co);
         assertThat(result.status()).isEqualTo(CustomerOrderStatus.CLOSED);
         assertThat(result.changedAt()).isEqualTo(co.closedAt());
     }
