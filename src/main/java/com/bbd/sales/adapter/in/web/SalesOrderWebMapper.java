@@ -13,7 +13,9 @@ import com.bbd.sales.domain.SalesOrderStatus;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 웹 경계 변환기.
@@ -96,6 +98,17 @@ public class SalesOrderWebMapper {
     public SalesOrderStatusChangeResponse toStatusChangeResponse(SalesOrderStatusChangeResult r) {
         return new SalesOrderStatusChangeResponse(
                 r.soNumber(), r.status(), r.actor(), r.changedAt(), r.reason());
+    }
+
+    public SalesOrderStatsResponse toStatsResponse(SalesOrderStatsResult r) {
+        Map<String, Long> byStatus = new LinkedHashMap<>();
+        r.byStatus().forEach((k, v) -> byStatus.put(k.name(), v));
+        SalesOrderStatsResult.BackorderStats b = r.backorder();
+        List<SalesOrderStatsResponse.TopSku> tops = b.topSkus().stream()
+                .map(t -> new SalesOrderStatsResponse.TopSku(t.sku(), t.name(), t.lineCount(), t.totalQuantity()))
+                .toList();
+        return new SalesOrderStatsResponse(byStatus,
+                new SalesOrderStatsResponse.Backorder(b.count(), b.avgWaitDays(), b.maxWaitDays(), tops));
     }
 
     private SalesOrderSummaryResponse toSummaryResponse(SalesOrderSummaryResult r) {

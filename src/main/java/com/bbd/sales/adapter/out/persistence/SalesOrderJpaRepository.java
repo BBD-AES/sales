@@ -1,5 +1,6 @@
 package com.bbd.sales.adapter.out.persistence;
 
+import com.bbd.sales.domain.SalesOrderStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -7,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.querydsl.QuerydslPredicateExecutor;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 /** Spring Data JPA 리포지토리(영속 기술 세부). 포트가 아니라 어댑터 내부 도구. */
@@ -32,4 +34,12 @@ public interface SalesOrderJpaRepository
     /** 채번용: 해당 연도 prefix(예 'SO-2026-%')의 최대 so_number. 없으면 empty. */
     @Query("select max(s.soNumber) from SalesOrderJpaEntity s where s.soNumber like :pattern")
     Optional<String> findMaxSoNumber(@Param("pattern") String pattern);
+
+    /** 대시보드(#74): 상태별 카운트(지점 스코프 — :scope null=전체). 반환 행: [SalesOrderStatus, Long]. */
+    @Query("select s.status, count(s) from SalesOrderJpaEntity s where (:scope is null or s.toWarehouseName = :scope) group by s.status")
+    List<Object[]> countGroupByStatus(@Param("scope") String scope);
+
+    /** 대시보드(#74): 특정 상태 전체(지점 스코프). 백오더 분석용(라인은 @BatchSize 로 적재). */
+    @Query("select s from SalesOrderJpaEntity s where s.status = :status and (:scope is null or s.toWarehouseName = :scope)")
+    List<SalesOrderJpaEntity> findAllByStatusScoped(@Param("status") SalesOrderStatus status, @Param("scope") String scope);
 }

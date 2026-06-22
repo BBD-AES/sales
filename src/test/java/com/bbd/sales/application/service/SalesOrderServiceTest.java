@@ -23,7 +23,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -553,6 +555,40 @@ class SalesOrderServiceTest {
         assertThatThrownBy(() -> service.create(cmd))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.IDEMPOTENCY_KEY_CONFLICT);
+    }
+
+    @Test
+    @DisplayName("stats(#74): HQ는 전체(scope=null) — 상태카운트 passthrough + 백오더 집계(count/topSku)")
+    void stats_hq_aggregates() {
+        when(currentUserProvider.current()).thenReturn(HQ);
+        Map<SalesOrderStatus, Long> counts = new EnumMap<>(SalesOrderStatus.class);
+        counts.put(SalesOrderStatus.SUBMITTED, 2L);
+        counts.put(SalesOrderStatus.BACKORDERED, 1L);
+        when(repository.countByStatus(null)).thenReturn(counts);
+        when(repository.findAllByStatus(SalesOrderStatus.BACKORDERED, null))
+                .thenReturn(List.of(submitted("OIL-FLT-001", 10)));
+
+        var r = service.stats();
+
+        assertThat(r.byStatus().get(SalesOrderStatus.SUBMITTED)).isEqualTo(2L);
+        assertThat(r.backorder().count()).isEqualTo(1);
+        assertThat(r.backorder().topSkus()).hasSize(1);
+        assertThat(r.backorder().topSkus().get(0).sku()).isEqualTo("OIL-FLT-001");
+        assertThat(r.backorder().topSkus().get(0).totalQuantity()).isEqualTo(10);
+        assertThat(r.backorder().maxWaitDays()).isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("stats(#74): BRANCH는 본인 창고이름으로 스코프 전달")
+    void stats_branch_scoped() {
+        when(currentUserProvider.current()).thenReturn(STAFF); // 강남 1지점
+        when(repository.countByStatus("강남 1지점")).thenReturn(new EnumMap<>(SalesOrderStatus.class));
+        when(repository.findAllByStatus(SalesOrderStatus.BACKORDERED, "강남 1지점")).thenReturn(List.of());
+
+        service.stats();
+
+        verify(repository).countByStatus("강남 1지점");
+        verify(repository).findAllByStatus(SalesOrderStatus.BACKORDERED, "강남 1지점");
     }
 
     @Test

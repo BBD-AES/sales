@@ -4,6 +4,7 @@ import com.bbd.sales.application.port.out.SalesOrderPage;
 import com.bbd.sales.application.port.out.SalesOrderRepository;
 import com.bbd.sales.application.port.out.SalesOrderSearchCriteria;
 import com.bbd.sales.domain.SalesOrder;
+import com.bbd.sales.domain.SalesOrderStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -12,7 +13,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
 import java.time.Year;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -73,5 +76,20 @@ public class SalesOrderPersistenceAdapter implements SalesOrderRepository {
 
         List<SalesOrder> content = result.getContent().stream().map(mapper::toDomain).toList();
         return new SalesOrderPage(content, result.getTotalElements(), result.getNumber(), result.getSize());
+    }
+
+    @Override
+    public Map<SalesOrderStatus, Long> countByStatus(String warehouseNameScope) {
+        Map<SalesOrderStatus, Long> counts = new EnumMap<>(SalesOrderStatus.class);
+        for (SalesOrderStatus s : SalesOrderStatus.values()) counts.put(s, 0L); // 빈 상태도 0으로 표기
+        for (Object[] row : jpaRepository.countGroupByStatus(warehouseNameScope)) {
+            counts.put((SalesOrderStatus) row[0], (Long) row[1]);
+        }
+        return counts;
+    }
+
+    @Override
+    public List<SalesOrder> findAllByStatus(SalesOrderStatus status, String warehouseNameScope) {
+        return jpaRepository.findAllByStatusScoped(status, warehouseNameScope).stream().map(mapper::toDomain).toList();
     }
 }

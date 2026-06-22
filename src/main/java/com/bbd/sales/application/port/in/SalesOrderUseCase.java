@@ -8,6 +8,7 @@ import com.bbd.sales.application.port.out.WarehouseStock;
 import com.bbd.sales.application.result.SalesOrderPageResult;
 import com.bbd.sales.application.result.SalesOrderResult;
 import com.bbd.sales.application.result.SalesOrderStatusChangeResult;
+import com.bbd.sales.application.result.SalesOrderStatsResult;
 import com.bbd.sales.application.result.SalesOrderSummaryResult;
 
 import java.util.List;
@@ -50,4 +51,7 @@ public interface SalesOrderUseCase {
     SalesOrderStatusChangeResult reject(String soNumber, String reason);
 
     SalesOrderStatusChangeResult receive(String soNumber);
+
+    /** 대시보드 집계(#74): 상태별 카운트 + 백오더 분석. 지점은 본인 창고로 스코프. */
+    SalesOrderStatsResult stats();
 }
