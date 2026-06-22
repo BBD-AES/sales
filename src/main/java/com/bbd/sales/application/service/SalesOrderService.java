@@ -126,9 +126,10 @@ public class SalesOrderService implements SalesOrderUseCase {
             a[1] += l.quantity();
         });
         List<SalesOrderStatsResult.TopSku> topSkus = agg.entrySet().stream()
-                .sorted(Comparator.comparingLong((Map.Entry<String, long[]> e) -> e.getValue()[0]).reversed())
+                .sorted(Comparator.<Map.Entry<String, long[]>>comparingLong(e -> e.getValue()[0]).reversed()
+                        .thenComparing(Map.Entry::getKey)) // 동률 시 sku 2차키로 결정성 보장
                 .limit(5)
-                .map(e -> new SalesOrderStatsResult.TopSku(e.getKey(), names.get(e.getKey()), e.getValue()[0], (int) e.getValue()[1]))
+                .map(e -> new SalesOrderStatsResult.TopSku(e.getKey(), names.get(e.getKey()), e.getValue()[0], e.getValue()[1]))
                 .toList();
         SalesOrderStatsResult.BackorderStats backorder = new SalesOrderStatsResult.BackorderStats(
                 backordered.size(),

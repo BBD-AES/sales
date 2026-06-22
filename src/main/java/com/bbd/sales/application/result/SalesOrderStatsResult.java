@@ -23,6 +23,6 @@ public record SalesOrderStatsResult(
     }
 
     /** 백오더 유발 상위 품목(라인 빈도순). */
-    public record TopSku(String sku, String name, long lineCount, int totalQuantity) {
+    public record TopSku(String sku, String name, long lineCount, long totalQuantity) {
     }
 }

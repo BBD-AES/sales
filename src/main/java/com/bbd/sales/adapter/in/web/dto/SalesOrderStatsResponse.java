@@ -11,6 +11,6 @@ public record SalesOrderStatsResponse(
     public record Backorder(long count, double avgWaitDays, long maxWaitDays, List<TopSku> topSkus) {
     }
 
-    public record TopSku(String sku, String name, long lineCount, int totalQuantity) {
+    public record TopSku(String sku, String name, long lineCount, long totalQuantity) {
     }
 }
