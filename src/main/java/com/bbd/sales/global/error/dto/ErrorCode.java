@@ -35,6 +35,9 @@ public enum ErrorCode {
     CUSTOMER_ORDER_NOT_CLOSABLE(HttpStatus.CONFLICT, "CO006", "CONFIRMED 상태의 수주만 종료할 수 있습니다."),
     CUSTOMER_ORDER_STOCK_INSUFFICIENT(HttpStatus.CONFLICT, "CO007", "지점 재고가 부족하여 수주를 종료할 수 없습니다."),
 
+    IDEMPOTENCY_KEY_CONFLICT(HttpStatus.CONFLICT, "IDEM001", "동일 요청이 처리 중입니다. 잠시 후 다시 시도해 주세요."),
+    IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT, "IDEM002", "이미 다른 요청에 사용된 Idempotency-Key 입니다."),
+
     ITEM_NOT_ORDERABLE(HttpStatus.BAD_REQUEST, "ITEM001", "주문할 수 없는 상품(SKU)이 포함되어 있습니다."),
     ITEM_NOT_FOUND(HttpStatus.BAD_REQUEST, "ITEM002", "존재하지 않는 상품(SKU)입니다."),
     WAREHOUSE_NAME_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "WH001", "창고 정보를 조회할 수 없습니다. 잠시 후 다시 시도해 주세요."),

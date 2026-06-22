@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -63,10 +64,11 @@ public class SalesOrderController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public SalesOrderDetailResponse create(
-            @Valid @RequestBody CreateSalesOrderRequest request
+            @Valid @RequestBody CreateSalesOrderRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) @Size(max = 200) String idempotencyKey
     ) {
         return webMapper.toDetailResponse(
-                salesOrderUseCase.create(webMapper.toCreateCommand(request)));
+                salesOrderUseCase.create(webMapper.toCreateCommand(request, idempotencyKey)));
     }
 
     // 조회(상세): 전 직무 허용(지점 본인창고 스코핑은 서비스에서)

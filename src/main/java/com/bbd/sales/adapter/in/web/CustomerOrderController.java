@@ -8,6 +8,7 @@ import com.bbd.securitycore.domain.UserRole;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -51,8 +52,9 @@ public class CustomerOrderController {
     @RequireRole({UserRole.BRANCH_STAFF, UserRole.BRANCH_MANAGER, UserRole.ADMIN})
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public CustomerOrderDetailResponse create(@Valid @RequestBody CreateCustomerOrderRequest request) {
-        return webMapper.toDetailResponse(customerOrderUseCase.create(webMapper.toCreateCommand(request)));
+    public CustomerOrderDetailResponse create(@Valid @RequestBody CreateCustomerOrderRequest request,
+                                              @RequestHeader(value = "Idempotency-Key", required = false) @Size(max = 200) String idempotencyKey) {
+        return webMapper.toDetailResponse(customerOrderUseCase.create(webMapper.toCreateCommand(request, idempotencyKey)));
     }
 
     // 조회(상세): 전 직무 허용(지점 본인지점 스코핑은 서비스 authorizeRead).

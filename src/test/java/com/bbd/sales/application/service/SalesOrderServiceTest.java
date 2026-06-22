@@ -8,6 +8,7 @@ import com.bbd.sales.application.command.SearchSalesOrderQuery;
 import com.bbd.sales.application.command.UpdateSalesOrderCommand;
 import com.bbd.sales.domain.*;
 import com.bbd.sales.global.error.ApiException;
+import com.bbd.sales.global.error.dto.ErrorCode;
 import com.bbd.sales.global.security.CurrentUser;
 import com.bbd.sales.global.security.RoleType;
 import org.junit.jupiter.api.Disabled;
@@ -60,6 +61,8 @@ class SalesOrderServiceTest {
     ProcurementPort procurementPort;
     @Mock
     CurrentUserProvider currentUserProvider;
+    @Mock
+    IdempotencyGuard idempotencyGuard;
 
     @InjectMocks
     SalesOrderService service;
@@ -474,9 +477,10 @@ class SalesOrderServiceTest {
                 .thenReturn(new ProductSnapshot("OIL-FLT-001", "오일필터", new BigDecimal("1000"), true));
         when(repository.nextSoNumber()).thenReturn("SO-9");
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(idempotencyGuard.findReplay(any(), any(), any())).thenReturn(Optional.empty());
         CreateSalesOrderCommand cmd = new CreateSalesOrderCommand(
                 "WH-BR-001", SalesOrderPriority.NORMAL, "메모",
-                List.of(new SalesOrderLineCommand("OIL-FLT-001", 10)));
+                List.of(new SalesOrderLineCommand("OIL-FLT-001", 10)), null);
 
         assertThat(service.create(cmd).soNumber()).isEqualTo("SO-9");
     }
@@ -486,9 +490,10 @@ class SalesOrderServiceTest {
     void create_otherWarehouse_forbidden() {
         when(currentUserProvider.current()).thenReturn(STAFF); // STAFF=강남
         when(warehousePort.warehouseName("WH-BR-002")).thenReturn("분당 1지점");
+        when(idempotencyGuard.findReplay(any(), any(), any())).thenReturn(Optional.empty());
         CreateSalesOrderCommand cmd = new CreateSalesOrderCommand(
                 "WH-BR-002", SalesOrderPriority.NORMAL, null,
-                List.of(new SalesOrderLineCommand("OIL-FLT-001", 10)));
+                List.of(new SalesOrderLineCommand("OIL-FLT-001", 10)), null);
 
         assertThatThrownBy(() -> service.create(cmd)).isInstanceOf(ApiException.class);
         verify(itemPort, never()).resolveProduct(any());
@@ -504,11 +509,50 @@ class SalesOrderServiceTest {
                 .thenReturn(new ProductSnapshot("OIL-FLT-001", "오일필터", new BigDecimal("1000"), true));
         when(repository.nextSoNumber()).thenReturn("SO-9");
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(idempotencyGuard.findReplay(any(), any(), any())).thenReturn(Optional.empty());
         CreateSalesOrderCommand cmd = new CreateSalesOrderCommand(
                 "WH-BR-003", SalesOrderPriority.NORMAL, null,
-                List.of(new SalesOrderLineCommand("OIL-FLT-001", 10)));
+                List.of(new SalesOrderLineCommand("OIL-FLT-001", 10)), null);
 
         assertThat(service.create(cmd).soNumber()).isEqualTo("SO-9");
+    }
+
+    @Test
+    @DisplayName("create 멱등: 같은 Idempotency-Key 재요청이면 기존 출고요청 반환, 채번/저장/기록 안 함")
+    void create_idempotentReplay_returnsExisting() {
+        when(currentUserProvider.current()).thenReturn(STAFF);
+        when(idempotencyGuard.findReplay(IdempotencyGuard.SO_CREATE, "BR003", "key-1"))
+                .thenReturn(Optional.of("SO-1"));
+        when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(submitted("OIL-FLT-001", 10)));
+        CreateSalesOrderCommand cmd = new CreateSalesOrderCommand(
+                "WH-BR-001", SalesOrderPriority.NORMAL, "메모",
+                List.of(new SalesOrderLineCommand("OIL-FLT-001", 10)), "key-1");
+
+        assertThat(service.create(cmd).soNumber()).isEqualTo("SO-1");
+        verify(repository, never()).nextSoNumber();
+        verify(repository, never()).save(any());
+        verify(idempotencyGuard, never()).record(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("create 멱등: 동시 같은 키로 record 충돌 시 409(IDEM001) 전파")
+    void create_idempotencyConflict_propagates() {
+        when(currentUserProvider.current()).thenReturn(STAFF);
+        when(idempotencyGuard.findReplay(any(), any(), any())).thenReturn(Optional.empty());
+        when(warehousePort.warehouseName("WH-BR-001")).thenReturn("강남 1지점");
+        when(itemPort.resolveProduct("OIL-FLT-001"))
+                .thenReturn(new ProductSnapshot("OIL-FLT-001", "오일필터", new BigDecimal("1000"), true));
+        when(repository.nextSoNumber()).thenReturn("SO-9");
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        doThrow(new ApiException(ErrorCode.IDEMPOTENCY_KEY_CONFLICT))
+                .when(idempotencyGuard).record(any(), any(), any(), any());
+        CreateSalesOrderCommand cmd = new CreateSalesOrderCommand(
+                "WH-BR-001", SalesOrderPriority.NORMAL, "메모",
+                List.of(new SalesOrderLineCommand("OIL-FLT-001", 10)), "key-2");
+
+        assertThatThrownBy(() -> service.create(cmd))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.IDEMPOTENCY_KEY_CONFLICT);
     }
 
     @Test
