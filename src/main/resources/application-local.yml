@@ -3,9 +3,9 @@ server:
   servlet:
     context-path: /sales
 
-sales:
-  inventory:
-    mode: stub
+#sales:
+#  inventory:
+#    mode: stub
 
 spring:
   application:
