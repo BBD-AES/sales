@@ -5,6 +5,7 @@ import com.bbd.sales.application.port.in.CustomerOrderUseCase;
 import com.bbd.sales.domain.CustomerOrderStatus;
 import com.bbd.securitycore.adapter.in.annotation.RequireRole;
 import com.bbd.securitycore.domain.UserRole;
+import com.bbd.securitycore.idempotency.Idempotent;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
@@ -49,7 +50,10 @@ public class CustomerOrderController {
     }
 
     // 생성(수주 접수): 지점 사용자(+ADMIN). 본인지점 한정은 서비스 소유 가드.
+    // 멱등(공통 표준): @Idempotent = Idempotency-Key 재요청 Redis 빠른길 + Swagger 헤더 노출(bbd-platform-core 0.0.8).
+    //   동시성 정확성 보루는 서비스의 DB UNIQUE(uk_idempotency_key, IdempotencyGuard) — 둘은 2층 구조(spec §4).
     @RequireRole({UserRole.BRANCH_STAFF, UserRole.BRANCH_MANAGER, UserRole.ADMIN})
+    @Idempotent
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public CustomerOrderDetailResponse create(@Valid @RequestBody CreateCustomerOrderRequest request,
