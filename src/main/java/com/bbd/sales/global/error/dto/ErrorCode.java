@@ -37,6 +37,7 @@ public enum ErrorCode {
 
     IDEMPOTENCY_KEY_CONFLICT(HttpStatus.CONFLICT, "IDEM001", "동일 요청이 처리 중입니다. 잠시 후 다시 시도해 주세요."),
     IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT, "IDEM002", "이미 다른 요청에 사용된 Idempotency-Key 입니다."),
+    IDEMPOTENCY_KEY_ALREADY_PROCESSED(HttpStatus.CONFLICT, "IDEM003", "이미 처리된 요청입니다. (중복 생성 차단)"),
 
     ITEM_NOT_ORDERABLE(HttpStatus.BAD_REQUEST, "ITEM001", "주문할 수 없는 상품(SKU)이 포함되어 있습니다."),
     ITEM_NOT_FOUND(HttpStatus.BAD_REQUEST, "ITEM002", "존재하지 않는 상품(SKU)입니다."),

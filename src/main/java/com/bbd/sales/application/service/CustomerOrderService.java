@@ -86,13 +86,8 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     @Override
     public CustomerOrderResult create(CreateCustomerOrderCommand command) {
         CurrentUser user = currentUserProvider.current();
-        // #71 멱등: 같은 Idempotency-Key 재요청이면 최초 생성된 수주를 그대로 반환(중복 생성 방지).
-        var replay = idempotencyGuard.findReplay(IdempotencyGuard.CO_CREATE, user.employeeNumber(), command.idempotencyKey());
-        if (replay.isPresent()) {
-            CustomerOrder existing = load(replay.get());
-            authorizeOwnerWrite(existing, user); // 재요청도 정상 생성과 동일한 소유권 가드(스코프 변경 시 일관 차단)
-            return toResult(existing);
-        }
+        // 멱등 표준: 같은 Idempotency-Key 재요청은 409(이미 처리됨) — 원본 응답 캐시·재생 안 함(docs/idempotency-spec.md).
+        idempotencyGuard.ensureFirst(IdempotencyGuard.CO_CREATE, user.employeeNumber(), command.idempotencyKey());
         String dealerName = warehousePort.warehouseName(command.dealerWarehouseCode()); // 딜러명 스냅샷
         // 딜러명 미해결(코드 폴백=조회 실패)이면 fail-fast: 코드-as-이름 박제 방지 + 이름축 인가 오작동 방지.
         if (dealerName == null || dealerName.equals(command.dealerWarehouseCode())) {
@@ -108,7 +103,7 @@ public class CustomerOrderService implements CustomerOrderUseCase {
                 command.customerName(), command.customerContact(), command.note(),
                 lines, user.employeeNumber(), LocalDateTime.now());
         CustomerOrder saved = repository.save(co);
-        // #71 멱등: 생성 성공 후 키 기록(동시 같은 키면 409 → @Transactional 롤백, 재시도 시 위 findReplay 가 원본 회수).
+        // 멱등 표준: 생성 성공 후 키 기록. 동시 같은 키면 UNIQUE 충돌 → 409(IDEM001) → @Transactional 롤백. DB UNIQUE 가 정확성 최종 보루.
         idempotencyGuard.record(IdempotencyGuard.CO_CREATE, user.employeeNumber(), command.idempotencyKey(), saved.coNumber());
         return toResult(saved);
     }

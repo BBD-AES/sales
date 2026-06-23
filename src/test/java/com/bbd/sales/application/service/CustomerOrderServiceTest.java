@@ -94,9 +94,7 @@ class CustomerOrderServiceTest {
                 WH, "홍길동", "010-1234-5678", "메모",
                 List.of(new CustomerOrderLineCommand("OIL-FLT-001", 2)), null);
 
-        when(currentUserProvider.current()).thenReturn(BRANCH);
-        when(idempotencyGuard.findReplay(any(), any(), any())).thenReturn(Optional.empty());
-        when(warehousePort.warehouseName(WH)).thenReturn(WH_NAME);
+        when(currentUserProvider.current()).thenReturn(BRANCH);        when(warehousePort.warehouseName(WH)).thenReturn(WH_NAME);
         when(itemPort.resolveProduct("OIL-FLT-001"))
                 .thenReturn(new ProductSnapshot("OIL-FLT-001", "오일필터", new BigDecimal("1500")));
         when(repository.nextCoNumber()).thenReturn("CO-2026-0001");
@@ -134,9 +132,7 @@ class CustomerOrderServiceTest {
                 "WH-BR-777", "홍길동", "010-1234-5678", "메모",
                 List.of(new CustomerOrderLineCommand("OIL-FLT-001", 1)), null);
 
-        when(currentUserProvider.current()).thenReturn(ADMIN);
-        when(idempotencyGuard.findReplay(any(), any(), any())).thenReturn(Optional.empty());
-        when(warehousePort.warehouseName("WH-BR-777")).thenReturn("창고777");
+        when(currentUserProvider.current()).thenReturn(ADMIN);        when(warehousePort.warehouseName("WH-BR-777")).thenReturn("창고777");
         when(itemPort.resolveProduct("OIL-FLT-001"))
                 .thenReturn(new ProductSnapshot("OIL-FLT-001", "오일필터", new BigDecimal("1000")));
         when(repository.nextCoNumber()).thenReturn("CO-2026-0002");
@@ -157,7 +153,6 @@ class CustomerOrderServiceTest {
                 List.of(new CustomerOrderLineCommand("OIL-FLT-001", 1)), null);
 
         when(currentUserProvider.current()).thenReturn(BRANCH); // 강남
-        when(idempotencyGuard.findReplay(any(), any(), any())).thenReturn(Optional.empty());
         when(warehousePort.warehouseName("WH-BR-999")).thenReturn("분당 1지점"); // != 강남
 
         assertThatThrownBy(() -> service.create(command))
@@ -171,19 +166,18 @@ class CustomerOrderServiceTest {
     }
 
     @Test
-    @DisplayName("create 멱등: 같은 Idempotency-Key 재요청이면 기존 수주 반환, 채번/저장/기록 안 함")
-    void create_idempotentReplay_returnsExisting() {
+    @DisplayName("create 멱등: 같은 Idempotency-Key 재요청이면 409(IDEM003 이미 처리됨), 채번/저장/기록 안 함")
+    void create_idempotentDuplicate_conflict() {
         CreateCustomerOrderCommand command = new CreateCustomerOrderCommand(
                 WH, "홍길동", "010-1234-5678", "메모",
                 List.of(new CustomerOrderLineCommand("OIL-FLT-001", 2)), "key-1");
         when(currentUserProvider.current()).thenReturn(BRANCH);
-        when(idempotencyGuard.findReplay(IdempotencyGuard.CO_CREATE, "BR003", "key-1"))
-                .thenReturn(Optional.of("CO-2026-0001"));
-        when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(open("CO-2026-0001")));
+        doThrow(new ApiException(ErrorCode.IDEMPOTENCY_KEY_ALREADY_PROCESSED))
+                .when(idempotencyGuard).ensureFirst(IdempotencyGuard.CO_CREATE, "BR003", "key-1");
 
-        CustomerOrderResult result = service.create(command);
-
-        assertThat(result.coNumber()).isEqualTo("CO-2026-0001");
+        assertThatThrownBy(() -> service.create(command))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.IDEMPOTENCY_KEY_ALREADY_PROCESSED);
         verify(repository, never()).nextCoNumber();
         verify(repository, never()).save(any());
         verify(idempotencyGuard, never()).record(any(), any(), any(), any());
@@ -195,9 +189,7 @@ class CustomerOrderServiceTest {
         CreateCustomerOrderCommand command = new CreateCustomerOrderCommand(
                 WH, "홍길동", "010-1234-5678", "메모",
                 List.of(new CustomerOrderLineCommand("OIL-FLT-001", 2)), "key-2");
-        when(currentUserProvider.current()).thenReturn(BRANCH);
-        when(idempotencyGuard.findReplay(any(), any(), any())).thenReturn(Optional.empty());
-        when(warehousePort.warehouseName(WH)).thenReturn(WH_NAME);
+        when(currentUserProvider.current()).thenReturn(BRANCH);        when(warehousePort.warehouseName(WH)).thenReturn(WH_NAME);
         when(itemPort.resolveProduct("OIL-FLT-001"))
                 .thenReturn(new ProductSnapshot("OIL-FLT-001", "오일필터", new BigDecimal("1500")));
         when(repository.nextCoNumber()).thenReturn("CO-2026-0001");

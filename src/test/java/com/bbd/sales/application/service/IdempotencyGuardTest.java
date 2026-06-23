@@ -14,7 +14,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -30,25 +29,27 @@ class IdempotencyGuardTest {
     @InjectMocks IdempotencyGuard guard;
 
     @Test
-    @DisplayName("findReplay: 키 null/blank면 포트 조회 없이 empty")
-    void findReplay_nullOrBlankKey_empty() {
-        assertThat(guard.findReplay("CO_CREATE", "BR001", null)).isEmpty();
-        assertThat(guard.findReplay("CO_CREATE", "BR001", "  ")).isEmpty();
+    @DisplayName("ensureFirst: 키 null/blank면 포트 조회 없이 통과(no-op)")
+    void ensureFirst_nullOrBlankKey_noop() {
+        guard.ensureFirst("CO_CREATE", "BR001", null);
+        guard.ensureFirst("CO_CREATE", "BR001", "  ");
         verifyNoInteractions(port);
     }
 
     @Test
-    @DisplayName("findReplay: 같은 scope/요청자면 기존 자원번호 반환(replay)")
-    void findReplay_match_returnsResource() {
+    @DisplayName("ensureFirst: 같은 scope/요청자 기존 키면 409(IDEM003 이미 처리됨) — 원본 반환 안 함")
+    void ensureFirst_match_alreadyProcessed() {
         when(port.find("k1")).thenReturn(Optional.of(new IdempotencyRecord("k1", "CO_CREATE", "BR001", "CO-2026-0001")));
-        assertThat(guard.findReplay("CO_CREATE", "BR001", "k1")).contains("CO-2026-0001");
+        assertThatThrownBy(() -> guard.ensureFirst("CO_CREATE", "BR001", "k1"))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.IDEMPOTENCY_KEY_ALREADY_PROCESSED);
     }
 
     @Test
-    @DisplayName("findReplay: 같은 키가 다른 scope/요청자에 쓰였으면 409(IDEM002)")
-    void findReplay_reuse_conflict() {
+    @DisplayName("ensureFirst: 같은 키가 다른 scope/요청자에 쓰였으면 409(IDEM002)")
+    void ensureFirst_reuse_conflict() {
         when(port.find("k1")).thenReturn(Optional.of(new IdempotencyRecord("k1", "SO_CREATE", "BR999", "SO-1")));
-        assertThatThrownBy(() -> guard.findReplay("CO_CREATE", "BR001", "k1"))
+        assertThatThrownBy(() -> guard.ensureFirst("CO_CREATE", "BR001", "k1"))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.IDEMPOTENCY_KEY_REUSED);
     }
