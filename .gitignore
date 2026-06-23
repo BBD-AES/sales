@@ -50,3 +50,7 @@ src/main/resources/application-*.properties
 
 ### env ###
 .env
+
+.claude
+
+.gradle/gradle.properties

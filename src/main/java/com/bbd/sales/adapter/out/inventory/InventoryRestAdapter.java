@@ -24,7 +24,6 @@ import java.util.List;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "sales.inventory.mode", havingValue = "rest")
 public class InventoryRestAdapter implements InventoryPort {
 
     /** inventory 로 거는 '전화기'. Spring 이 어노테이션 보고 HTTP 호출코드를 자동 생성. */
