@@ -55,8 +55,11 @@ public class SalesOrderWebMapper {
                 req.lines() != null ? toLineCommands(req.lines()) : null);
     }
 
-    public ReserveLineCommand toReserveLineCommand(String soNumber, ReserveLineRequest req) {
-        return new ReserveLineCommand(soNumber, req.sku(), req.warehouseCode(), req.quantity(), req.requestId());
+    public ReserveLineCommand toReserveLineCommand(String soNumber, ReserveLineRequest req, String idempotencyKey) {
+        // 멱등 토큰 일원화: 게이트웨이가 강제하는 Idempotency-Key 헤더를 우선 사용.
+        // 레거시 클라이언트(헤더 미전송)는 바디 requestId 로 폴백 — 헤더 표준 전환기 호환.
+        String token = (idempotencyKey != null && !idempotencyKey.isBlank()) ? idempotencyKey : req.requestId();
+        return new ReserveLineCommand(soNumber, req.sku(), req.warehouseCode(), req.quantity(), token);
     }
 
     public List<WarehouseStockResponse> toStockResponses(List<WarehouseStock> stocks) {

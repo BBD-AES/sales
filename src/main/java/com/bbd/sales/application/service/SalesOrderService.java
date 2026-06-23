@@ -251,11 +251,11 @@ public class SalesOrderService implements SalesOrderUseCase {
             throw new ApiException(ErrorCode.SALES_ORDER_LINE_FULLY_RESERVED);
         }
         int want = Math.min(cmd.quantity(), shortfall);
-        // 2) inventory 예약(동기, 원자) → 실제 잡힌 양. requestId는 프론트가 클릭 시 만든 멱등키.
+        // 2) inventory 예약(동기, 원자) → 실제 잡힌 양. idempotencyKey=공통 멱등 토큰(inventory dedup 키로 전파).
         ReservationResult rr = inventoryPort.reserveFromWarehouse(
-                cmd.requestId(), so.soNumber(), cmd.sku(), cmd.warehouseCode(), want);
+                cmd.idempotencyKey(), so.soNumber(), cmd.sku(), cmd.warehouseCode(), want);
         // 3) 실제 잡힌 양만 도메인 라인에 누적(상태 그대로 SUBMITTED).
-        //    (주의) 같은 requestId 재요청 시 inventory 멱등 반환을 sales가 또 누적하는 이중계상은 #55(requestId 영속 dedup)로 분리.
+        //    (주의) 같은 멱등키 재요청 시 inventory 멱등 반환을 sales가 또 누적하는 이중계상은 inventory 영속 dedup(UNIQUE)로 분리.
         so.reserveLine(cmd.sku(), rr.reserved());
         repository.save(so);
         return toResult(so);   // 응답에 라인별 reservedQuantity/부족분 → 사람이 보고 또 예약
