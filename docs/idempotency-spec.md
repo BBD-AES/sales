@@ -21,7 +21,7 @@
 | 레이어 | 역할 |
 |---|---|
 | **게이트웨이** | 변경 라우트에 헤더 **강제**(없으면 `400`) + 헤더 **그대로 전파**. **dedup 안 함.** |
-| **각 MSA (공유 라이브러리)** | 멱등 **판정**. `bbd-security-core`(@RequireRole) 패턴과 동일하게 공유 스타터로 적용 — 보일러플레이트 0. |
+| **각 MSA (공유 라이브러리)** | 멱등 **판정**. `bbd-platform-core`(구 bbd-security-core)의 `@Idempotent`(@RequireRole 과 동일 AOP 패턴)로 적용 — 보일러플레이트 0. |
 | **DB `UNIQUE(idempotency_key)`** | **정확성의 최종 보루.** 쓰기와 같은 트랜잭션. Redis가 없어도 멱등 성립. |
 
 > **게이트웨이가 dedup·응답 replay를 하지 않는 이유**: ① 부수효과 at-most-once는 쓰기와 같은 트랜잭션/유니크 제약에 묶여야 보장됨(서비스만 가능) ② 응답 replay 의미·스코프는 엔드포인트별 비즈니스 결정 ③ stateless 라우터를 stateful 임계점으로 만들면 Redis 장애 시 전 트래픽 차단(blast radius). → 게이트웨이는 **강제·전파**만, **판정은 서비스**.
@@ -56,11 +56,11 @@
 ## 8. 레퍼런스 & 마이그레이션
 - **레퍼런스 구현**: `sales` #71 — `uk_idempotency_key` DB 제약 + replay 소유권 인가.
 - **변경점(중요)**: #71은 중복 시 **원본 응답 반환**이었음 → 본 표준은 **`409`**(응답 캐시 없음). `sales`는 중복 분기를 `409`로, `frontend-react`는 `409`를 "이미 처리"로 정렬 필요.
-- **공유 라이브러리**: `bbd-idempotency` 스타터(또는 `bbd-security-core` 확장) — 서블릿 필터/인터셉터 + `@Idempotent` + Redis. 각 서비스는 의존성 추가만.
+- **공유 라이브러리**: **`bbd-platform-core`**(구 `bbd-security-core`)의 `com.bbd.securitycore.idempotency` 패키지 — `@Idempotent` + AOP + Redis 빠른길. 각 서비스는 의존성 좌표 `com.bbd:bbd-platform-core:0.0.7` + `@Idempotent` 부착 + DB UNIQUE 추가. (모듈은 보안만이 아닌 플랫폼 스타터라 rename.)
 
 ## 9. 체크리스트 (팀별)
 - [ ] **게이트웨이**: 변경 라우트 헤더 강제(`400`) + 전파
-- [ ] **공유 스타터** `bbd-idempotency` 추가 + 각 서비스 적용
+- [ ] **공유 스타터** `bbd-platform-core`(구 security-core) 의존성 + `@Idempotent` 적용
 - [ ] 멱등 대상 테이블에 `UNIQUE(idempotency_key)`
 - [ ] 중복 응답 `409`로 통일 + 클라 `409` 처리
 - [ ] Redis 키 `idem:{service}:{principal}:{key}` = `true`, TTL 24h
