@@ -71,6 +71,13 @@ public class SalesOrderController {
                 salesOrderUseCase.create(webMapper.toCreateCommand(request, idempotencyKey)));
     }
 
+    // 대시보드 집계(#74): 전 직무(지점 스코핑은 서비스). 리터럴 /stats 가 /{soNumber} 보다 우선 매칭됨.
+    @RequireRole({UserRole.HQ_MANAGER, UserRole.HQ_STAFF, UserRole.BRANCH_MANAGER, UserRole.BRANCH_STAFF, UserRole.ADMIN})
+    @GetMapping("/stats")
+    public SalesOrderStatsResponse stats() {
+        return webMapper.toStatsResponse(salesOrderUseCase.stats());
+    }
+
     // 조회(상세): 전 직무 허용(지점 본인창고 스코핑은 서비스에서)
     @RequireRole({UserRole.HQ_MANAGER, UserRole.HQ_STAFF, UserRole.BRANCH_MANAGER, UserRole.BRANCH_STAFF, UserRole.ADMIN})
     @GetMapping("/{soNumber}")

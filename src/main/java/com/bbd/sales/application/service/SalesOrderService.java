@@ -16,10 +16,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.LongSummaryStatistics;
+import java.util.Map;
 
 /**
  * 유스케이스 구현 = "오케스트레이션 계층".
@@ -86,6 +92,51 @@ public class SalesOrderService implements SalesOrderUseCase {
         SalesOrder so = load(soNumber);
         authorizeRead(so, currentUserProvider.current()); // 지점=본인창고만(이름축), HQ/ADMIN=전체.
         return toResult(so);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SalesOrderStatsResult stats() {
+        CurrentUser user = currentUserProvider.current();
+        // 지점=본인 창고이름으로 스코프(search 와 동일 규칙), HQ/ADMIN=전체(null).
+        String scope;
+        if (user.isHq()) {
+            scope = null;
+        } else {
+            scope = user.warehouseName();
+            if (scope == null || scope.isBlank()) {
+                throw new ApiException(ErrorCode.AUTH_HEADER_REQUIRED);
+            }
+        }
+        Map<SalesOrderStatus, Long> byStatus = repository.countByStatus(scope);
+
+        List<SalesOrder> backordered = repository.findAllByStatus(SalesOrderStatus.BACKORDERED, scope);
+        LocalDateTime now = LocalDateTime.now();
+        // 대기일 = 요청 후 경과(별도 백오더 타임스탬프 없어 근사). 음수 방지.
+        LongSummaryStatistics waits = backordered.stream()
+                .mapToLong(o -> Math.max(0, Duration.between(o.requestedAt(), now).toDays()))
+                .summaryStatistics();
+        // 백오더 라인 sku별 집계 → 빈도 상위 5
+        Map<String, long[]> agg = new LinkedHashMap<>(); // sku -> [lineCount, qtySum]
+        Map<String, String> names = new HashMap<>();
+        backordered.stream().flatMap(o -> o.lines().stream()).forEach(l -> {
+            names.putIfAbsent(l.sku(), l.nameSnapshot());
+            long[] a = agg.computeIfAbsent(l.sku(), k -> new long[2]);
+            a[0]++;
+            a[1] += l.quantity();
+        });
+        List<SalesOrderStatsResult.TopSku> topSkus = agg.entrySet().stream()
+                .sorted(Comparator.<Map.Entry<String, long[]>>comparingLong(e -> e.getValue()[0]).reversed()
+                        .thenComparing(Map.Entry::getKey)) // 동률 시 sku 2차키로 결정성 보장
+                .limit(5)
+                .map(e -> new SalesOrderStatsResult.TopSku(e.getKey(), names.get(e.getKey()), e.getValue()[0], e.getValue()[1]))
+                .toList();
+        SalesOrderStatsResult.BackorderStats backorder = new SalesOrderStatsResult.BackorderStats(
+                backordered.size(),
+                backordered.isEmpty() ? 0.0 : waits.getAverage(),
+                backordered.isEmpty() ? 0L : waits.getMax(),
+                topSkus);
+        return new SalesOrderStatsResult(byStatus, backorder);
     }
 
     // ============================ 생성/수정 ============================

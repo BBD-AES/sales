@@ -1,7 +1,10 @@
 package com.bbd.sales.application.port.out;
 
 import com.bbd.sales.domain.SalesOrder;
+import com.bbd.sales.domain.SalesOrderStatus;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -25,4 +28,10 @@ public interface SalesOrderRepository {
     void lockForUpdate(String soNumber);
 
     SalesOrderPage search(SalesOrderSearchCriteria criteria, int page, int size);
+
+    /** 대시보드(#74): 상태별 카운트. scope=창고이름(지점 스코프), null=전체. 모든 상태 0 포함. */
+    Map<SalesOrderStatus, Long> countByStatus(String warehouseNameScope);
+
+    /** 대시보드(#74): 특정 상태 주문 전체(라인 포함). scope=창고이름, null=전체. 백오더 분석용. */
+    List<SalesOrder> findAllByStatus(SalesOrderStatus status, String warehouseNameScope);
 }
