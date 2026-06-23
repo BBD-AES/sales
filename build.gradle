@@ -51,7 +51,7 @@ dependencies {
 	// (안내서) Q 클래스 생성 과정에서 @Generated 같은 "자동 생성 코드 표시" 타입을 찾을 수 있게 함.
 	annotationProcessor 'jakarta.annotation:jakarta.annotation-api' // @Generated 해석, 제작기(APT)에게 @Generated(컴퓨터가 만든 코드임)를 알려줌
 
-	implementation 'com.bbd:bbd-platform-core:0.0.7'
+	implementation 'com.bbd:bbd-platform-core:0.0.8'
 }
 
 tasks.named('test') {
