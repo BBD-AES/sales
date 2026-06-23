@@ -95,6 +95,7 @@ public class SalesOrderController {
 
     // [수동 예약] 사람이 고른 한 창고에서 라인 예약(여러 번). requestId=프론트 클릭당 멱등키(UUID).
     @RequireRole({UserRole.HQ_MANAGER, UserRole.ADMIN})
+    @Idempotent
     @PostMapping("/{soNumber}/reservations")
     public SalesOrderDetailResponse reserveLine(@PathVariable String soNumber,
                                                 @Valid @RequestBody ReserveLineRequest request) {
