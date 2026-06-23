@@ -93,13 +93,8 @@ public class SalesOrderService implements SalesOrderUseCase {
     @Override
     public SalesOrderResult create(CreateSalesOrderCommand command) {
         CurrentUser user = currentUserProvider.current();
-        // #71 멱등: 같은 Idempotency-Key 재요청이면 최초 생성된 출고요청을 그대로 반환(중복 생성 방지).
-        var replay = idempotencyGuard.findReplay(IdempotencyGuard.SO_CREATE, user.employeeNumber(), command.idempotencyKey());
-        if (replay.isPresent()) {
-            SalesOrder existing = load(replay.get());
-            authorizeOwnerWrite(existing, user); // 재요청도 정상 생성과 동일한 소유권 가드(스코프 변경 시 일관 차단)
-            return toResult(existing);
-        }
+        // 멱등 표준: 같은 Idempotency-Key 재요청은 409(이미 처리됨) — 원본 응답 캐시·재생 안 함(docs/idempotency-spec.md).
+        idempotencyGuard.ensureFirst(IdempotencyGuard.SO_CREATE, user.employeeNumber(), command.idempotencyKey());
 
         // 창고명 스냅샷: 생성 시점에 한 번 조회(이후 읽기는 원격 호출 0). 출발지(source)는 sales가 저장 안 함.
         String toName = warehousePort.warehouseName(command.toWarehouseCode());
@@ -126,7 +121,7 @@ public class SalesOrderService implements SalesOrderUseCase {
                 user.employeeNumber(), LocalDateTime.now());
 
         SalesOrder saved = repository.save(so);
-        // #71 멱등: 생성 성공 후 키 기록(동시 같은 키면 409 → @Transactional 롤백, 재시도 시 위 findReplay 가 원본 회수).
+        // 멱등 표준: 생성 성공 후 키 기록. 동시 같은 키면 UNIQUE 충돌 → 409(IDEM001) → @Transactional 롤백. DB UNIQUE 가 정확성 최종 보루.
         idempotencyGuard.record(IdempotencyGuard.SO_CREATE, user.employeeNumber(), command.idempotencyKey(), saved.soNumber());
         return toResult(saved);
     }

@@ -7,8 +7,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
-import java.util.Optional;
-
 /**
  * 생성(POST) 멱등성 가드(#71). SO/CO 생성 서비스가 공유한다(평행 중복 최소화).
  * 호출측 트랜잭션 안에서 동작 — find 로 재요청을 걸러내고, record 로 최초 처리만 통과시킨다.
@@ -24,23 +22,24 @@ public class IdempotencyGuard {
     private final IdempotencyPort port;
 
     /**
-     * 재요청(replay)이면 그때 만든 자원번호를 반환(호출측이 로드해 원본 응답을 돌려줌). 키 없으면 empty(=정상 진행).
-     * 같은 키가 다른 scope/요청자에 쓰였으면 키 오용 → 409.
+     * 멱등 표준(docs/idempotency-spec.md): 중복은 409 — 원본 응답을 캐시·재생하지 않는다.
+     * 이미 처리된 키면 409(IDEM003), 같은 키가 다른 scope/요청자에 쓰였으면 키 오용 409(IDEM002), 키 없으면 no-op(=정상 진행).
+     * 클라이언트는 409 를 "이미 처리됨"으로 해석(목록 이동/재조회).
      */
-    public Optional<String> findReplay(String scope, String requester, String idempotencyKey) {
+    public void ensureFirst(String scope, String requester, String idempotencyKey) {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
-            return Optional.empty();
+            return;
         }
-        return port.find(idempotencyKey).map(r -> {
+        port.find(idempotencyKey).ifPresent(r -> {
             if (!r.scope().equals(scope) || !r.requester().equals(requester)) {
                 throw new ApiException(ErrorCode.IDEMPOTENCY_KEY_REUSED);
             }
-            return r.resourceNumber();
+            throw new ApiException(ErrorCode.IDEMPOTENCY_KEY_ALREADY_PROCESSED);
         });
     }
 
     /**
-     * 최초 처리 기록. 키 없으면 no-op. 동시 같은 키면 UNIQUE 충돌 → 409(트랜잭션 롤백 → 재시도 시 findReplay 가 원본 회수).
+     * 최초 처리 기록. 키 없으면 no-op. 동시 같은 키면 UNIQUE 충돌 → 409(IDEM001, 트랜잭션 롤백). DB UNIQUE 가 정확성의 최종 보루.
      */
     public void record(String scope, String requester, String idempotencyKey, String resourceNumber) {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
