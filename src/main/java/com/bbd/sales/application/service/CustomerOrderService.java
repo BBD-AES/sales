@@ -144,8 +144,11 @@ public class CustomerOrderService implements CustomerOrderUseCase {
         CustomerOrder co = load(coNumber);
         authorizeOwnerWrite(co, currentUser);
         co.close(currentUser.employeeNumber(), LocalDateTime.now()); // CONFIRMED→CLOSED 검증·전이(비CONFIRMED 면 NOT_CLOSABLE)
-        // [멱등 #10] create 와 동일하게 sales 레이어 가드 추가 — 키 없으면 no-op. 모바일이 Idempotency-Key=coNumber 로 보내면
-        //   uk_idempotency_key UNIQUE(키 단독)로 'CO당 close 1회' 직렬화(동시 close 2건/재시도 차단). inventory referenceNumber dedup 과 2층 방어.
+        // [멱등 #10] create 와 동일 — 키 없으면 no-op. 키=클라(모바일) 생성 UUID(요청 1건당 1키, 재시도 시 동일키 재전송). 전역 uk_idempotency_key
+        //   UNIQUE 에 기록 → 커밋 전 동시 close 2건/응답유실 재시도를 sales 앞단서 차단. coNumber 를 '키'로 쓰지 않는 이유: 키 단독 UNIQUE 라
+        //   coNumber 를 키로 넣으면 미래 타 스코프 자연키와 'CO-2026-xxxx' 문자열 충돌 시 정상 close 오거부(IDEM002) 위험 — 그래서 coNumber 는
+        //   resourceNumber(원장 참조 컬럼)로만 기록한다. 실제 at-most-once 차감 보루는 아래 inventory 의 referenceNumber(=coNumber) dedup.
+        //   (자연멱등: 2번째 close 는 위 co.close() 에서 NOT_CLOSABLE 로도 거부 — 키/dedup 이 막는 건 '커밋 전 동시창'뿐.)
         idempotencyGuard.record(IdempotencyGuard.CO_CLOSE, currentUser.employeeNumber(), idempotencyKey, coNumber);
         // #69: 종료 = 고객 인도 = 지점재고 물리 차감. inventory 동기 호출 → 부족 시 예외 → @Transactional 롤백(save 미호출) → 종료 안 됨.
         //  재고는 sync 원칙(예약과 동일 TOCTOU; 지점재고는 HQ 예약과 공유 자원이라 async 면 오버셀).
