@@ -25,6 +25,7 @@ public record SalesOrderDetailResponse(
         String rejectedReason,
         BigDecimal totalAmount,
         String note,
+        String customerOrderNumber,
         List<SalesOrderLineResponse> lines
 ) {
 }

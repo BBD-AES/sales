@@ -97,14 +97,17 @@ public class SalesOrderController {
         return webMapper.toStockResponses(salesOrderUseCase.stockAvailability(soNumber, sku));
     }
 
-    // [수동 예약] 사람이 고른 한 창고에서 라인 예약(여러 번). requestId=프론트 클릭당 멱등키(UUID).
+    // [수동 예약] 사람이 고른 한 창고에서 라인 예약(여러 번).
+    // 멱등(공통 표준): @Idempotent = Idempotency-Key 헤더 재요청 Redis 빠른길. 이 키는 inventory 예약 dedup 으로 그대로 전파된다.
+    //   (레거시 바디 requestId 는 헤더 미전송 시 폴백 — 매퍼에서 해석.)
     @RequireRole({UserRole.HQ_MANAGER, UserRole.ADMIN})
     @Idempotent
     @PostMapping("/{soNumber}/reservations")
     public SalesOrderDetailResponse reserveLine(@PathVariable String soNumber,
-                                                @Valid @RequestBody ReserveLineRequest request) {
+                                                @Valid @RequestBody ReserveLineRequest request,
+                                                @RequestHeader(value = "Idempotency-Key", required = false) @Size(max = 200) String idempotencyKey) {
         return webMapper.toDetailResponse(
-                salesOrderUseCase.reserveLine(webMapper.toReserveLineCommand(soNumber, request)));
+                salesOrderUseCase.reserveLine(webMapper.toReserveLineCommand(soNumber, request, idempotencyKey)));
     }
 
     // 수정: 지점 사용자(+ADMIN), REQUESTED 에서만(상태검증은 도메인)

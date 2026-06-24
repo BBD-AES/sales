@@ -52,16 +52,17 @@ public class InventoryRestAdapter implements InventoryPort {
      * HQ 가 "이 SKU 를, 이 창고에서, N개" 버튼을 누르면 호출 → inventory 가 '실제 잡힌 양'을 돌려준다.
      * 가용이 모자라면 부분만 잡힘(에러 아님). 부족분은 사람이 보고 '다른 창고에서 또 예약'을 누른다.
      *
-     * @param requestId 멱등키(UUID). '이 버튼 클릭 한 번'을 가리키는 표식 — 누른 쪽(프론트)이 만들어 넘김.
-     *                  같은 클릭이 타임아웃/더블클릭으로 두 번 날아가도 inventory 가 한 번만 처리하게 함.
-     *                  (자세한 건 아래 3번 설명)
+     * @param idempotencyKey 공통 멱등 토큰(Idempotency-Key). 같은 클릭이 타임아웃/더블클릭으로 두 번 날아가도
+     *                  inventory 가 한 번만 처리하게 한다. inventory 표준에 맞춰 Idempotency-Key '헤더'로 보내고,
+     *                  레거시 inventory 호환을 위해 바디 requestId 에도 같은 값을 싣는다(둘 다 같은 키).
      * @return 실제 잡힌 양. 50 요청에 30 잡히면 reserved=30, 부족 20.
      */
     @Override
     public ReservationResult reserveFromWarehouse(
-            String requestId, String soNumber, String sku, String warehouseCode, int quantity) {
+            String idempotencyKey, String soNumber, String sku, String warehouseCode, int quantity) {
         ReserveResponse r = client.reserve(                                // 단일 창고 예약 호출(딱 1번)
-                new ReserveRequest(requestId, soNumber, sku, warehouseCode, quantity));
+                idempotencyKey,                                            // Idempotency-Key 헤더(inventory 멱등 표준)
+                new ReserveRequest(idempotencyKey, soNumber, sku, warehouseCode, quantity)); // 바디 requestId=동일 키(레거시 폴백)
         // r.reserved()       = 실제 잡힌 양
         // r.remainingRequested() = 못 잡은 분(>0 이면 사람이 다른 창고로 또 예약)
         return new ReservationResult(sku, r.requested(), r.reserved());

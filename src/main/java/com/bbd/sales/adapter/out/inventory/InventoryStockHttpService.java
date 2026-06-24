@@ -6,6 +6,7 @@ import com.bbd.sales.adapter.out.inventory.dto.StockOutboundRequest;
 import com.bbd.sales.adapter.out.inventory.dto.ReserveResponse;
 import com.bbd.sales.adapter.out.inventory.dto.StockAvailabilityResponse;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.service.annotation.GetExchange;
 import org.springframework.web.service.annotation.HttpExchange;
@@ -24,9 +25,9 @@ public interface InventoryStockHttpService {
     @GetExchange("/availability")
     List<StockAvailabilityResponse> availability(@RequestParam("sku") List<String> sku);
 
-    // 원자적 단일창고 예약 - 실제 잡힌 양 반환.
+    // 원자적 단일창고 예약 - 실제 잡힌 양 반환. 멱등 토큰은 Idempotency-Key 헤더(공통 표준)로 전파.
     @PostExchange("/reservations")
-    ReserveResponse reserve(@RequestBody ReserveRequest request);
+    ReserveResponse reserve(@RequestHeader("Idempotency-Key") String idempotencyKey, @RequestBody ReserveRequest request);
 
     // 출고(확정): SO의 RESERVED 전부 차감 + movement OUT. 멱등.
     @PostExchange("/reservations/issue")

@@ -10,8 +10,8 @@ import java.util.List;
 public interface InventoryPort {
     // 사람이 창고 고르기 위한 현황 조회
     List<WarehouseStock> availability(String sku);
-    // 사람이 고른 '한 창고'에서 한 번 예약 → 실제 잡힌 양
-    ReservationResult reserveFromWarehouse(String requestId, String soNumber, String sku, String warehouseCode, int quantity);
+    // 사람이 고른 '한 창고'에서 한 번 예약 → 실제 잡힌 양. idempotencyKey=공통 멱등 토큰(inventory dedup 키로 전파).
+    ReservationResult reserveFromWarehouse(String idempotencyKey, String soNumber, String sku, String warehouseCode, int quantity);
     // receive 시 출고(차감)
     void transferForSalesOrderReceive(String soNumber, String destinationWarehouseCode, String issuerId, List<StockTransferLine> lines);
     // cancel/reject 시 예약 해제
