@@ -11,5 +11,5 @@ import java.util.List;
 public interface ProcurementPort {
 
     /** 재고 부족분에 대한 구매요청(PR). sales HQ -> procurement HQ. PO 작성은 procurement 책임. */
-    void requestPurchase(String soNumber, String destinationWarehouseCode, List<StockTransferLine> lines);
+    void requestPurchase(String soNumber, String destinationWarehouseCode, List<ShortfallLine> lines);
 }

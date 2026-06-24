@@ -18,6 +18,7 @@ public record PurchaseRequested(
 ) {
     public record Line(
             String sku,
-            int quantity       // 부족 수량(구매 요청 수량). 단가 없음 — 협상가는 procurement가 PO에서 결정
+            int quantity,      // 부족 수량(구매 요청 수량). 단가 없음 — 협상가는 procurement가 PO에서 결정
+            String sourcingType // ★ nullable. "BUY"|"MAKE" — 분기 힌트(권위=item 마스터). null=미지정→procurement가 해석
     ) {}
 }

@@ -2,7 +2,8 @@ package com.bbd.sales.adapter.out.procurement;
 
 import com.bbd.sales.adapter.out.event.OutboxEvent;
 import com.bbd.sales.adapter.out.event.OutboxRepository;
-import com.bbd.sales.application.port.out.StockTransferLine;
+import com.bbd.sales.application.port.out.ShortfallLine;
+import com.bbd.sales.domain.SourcingType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -32,8 +33,8 @@ class OutboxProcurementAdapterTest {
     void requestPurchase_enqueuesContractEvent() throws Exception {
         adapter.requestPurchase(
                 "SO-2026-000042", "WH-BR-1001",
-                List.of(new StockTransferLine("SKU-1001", 3),
-                        new StockTransferLine("SKU-2002", 5)));
+                List.of(new ShortfallLine("SKU-1001", 3, SourcingType.BUY),
+                        new ShortfallLine("SKU-2002", 5, null))); // null=미지정(procurement 폴백) 케이스도 검증
 
         ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
         verify(outbox).save(captor.capture());
@@ -54,7 +55,9 @@ class OutboxProcurementAdapterTest {
         assertThat(ev.lines()).hasSize(2);
         assertThat(ev.lines().get(0).sku()).isEqualTo("SKU-1001");
         assertThat(ev.lines().get(0).quantity()).isEqualTo(3);
+        assertThat(ev.lines().get(0).sourcingType()).isEqualTo("BUY"); // enum -> 계약 문자열
         assertThat(ev.lines().get(1).sku()).isEqualTo("SKU-2002");
         assertThat(ev.lines().get(1).quantity()).isEqualTo(5);
+        assertThat(ev.lines().get(1).sourcingType()).isNull();         // 미지정은 null 그대로(하위호환)
     }
 }

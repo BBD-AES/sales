@@ -271,7 +271,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         so.confirmByHq(user.employeeNumber(), LocalDateTime.now());   // reserveAndRoute 호출 없음!
         repository.save(so);
         // 부족분 남으면(BACKORDERED) procurement에 통지(기존 이벤트 그대로)
-        List<StockTransferLine> shortfall = so.shortfallLines();
+        List<ShortfallLine> shortfall = so.shortfallLines();
         if (!shortfall.isEmpty()) {
             procurementPort.requestPurchase(so.soNumber(), so.toWarehouseCode(), shortfall);
         }
@@ -401,8 +401,8 @@ public class SalesOrderService implements SalesOrderUseCase {
                 inactive.add(p.sku());
                 continue;
             }
-            // 사용자가 입력한 순서대로 라인 번호 저장
-            lines.add(new SalesOrderLine(lineNo++, p.sku(), p.name(), p.unitPrice(), lc.quantity()));
+            // 사용자가 입력한 순서대로 라인 번호 저장. sourcingType 도 생성 시점 스냅샷(백오더 라우팅 힌트, item 재조회 불필요).
+            lines.add(new SalesOrderLine(lineNo++, p.sku(), p.name(), p.unitPrice(), p.sourcingType(), lc.quantity()));
         }
         if (!inactive.isEmpty()) {
             throw new ApiException(ErrorCode.ITEM_NOT_ORDERABLE, "주문 불가(비활성) SKU: " + String.join(", ", inactive));
@@ -417,8 +417,8 @@ public class SalesOrderService implements SalesOrderUseCase {
     private SalesOrderResult toResult(SalesOrder so) {
         List<SalesOrderLineResult> lines = so.lines().stream()
                 .map(l -> new SalesOrderLineResult(
-                        l.lineNo(), l.sku(), l.nameSnapshot(), l.unitPriceSnapshot(), l.quantity(),
-                        l.reservedQuantity(), l.fulfillmentSource()))
+                        l.lineNo(), l.sku(), l.nameSnapshot(), l.unitPriceSnapshot(), l.sourcingType(),
+                        l.quantity(), l.reservedQuantity(), l.fulfillmentSource()))
                 .toList();
         return new SalesOrderResult(
                 so.soNumber(),

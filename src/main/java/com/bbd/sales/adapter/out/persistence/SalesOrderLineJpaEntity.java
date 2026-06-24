@@ -1,6 +1,7 @@
 package com.bbd.sales.adapter.out.persistence;
 
 import com.bbd.sales.domain.FulfillmentSource;
+import com.bbd.sales.domain.SourcingType;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -33,6 +34,12 @@ public class SalesOrderLineJpaEntity {
     private String sku;
     private String nameSnapshot;
     private BigDecimal unitPriceSnapshot;
+
+    // 조달구분 스냅샷(BUY/MAKE). 주문 시점 item 마스터 값을 박제 — 백오더 라우팅 힌트.
+    // nullable: 옛 행/조달구분 미제공 라인은 null. ddl-auto=update 가 컬럼 자동 추가(기존 행은 NULL).
+    @Enumerated(EnumType.STRING)
+    private SourcingType sourcingType;
+
     private int quantity;
 
     // ---라인레벨 충족추적---
@@ -44,11 +51,12 @@ public class SalesOrderLineJpaEntity {
     private FulfillmentSource fulfillmentSource;
 
     public SalesOrderLineJpaEntity(int lineNo, String sku, String nameSnapshot,
-                                   BigDecimal unitPriceSnapshot, int quantity) {
+                                   BigDecimal unitPriceSnapshot, SourcingType sourcingType, int quantity) {
         this.lineNo = lineNo;
         this.sku = sku;
         this.nameSnapshot = nameSnapshot;
         this.unitPriceSnapshot = unitPriceSnapshot;
+        this.sourcingType = sourcingType;
         this.quantity = quantity;
     }
 
@@ -57,6 +65,7 @@ public class SalesOrderLineJpaEntity {
         this.sku = src.sku;
         this.nameSnapshot = src.nameSnapshot;
         this.unitPriceSnapshot = src.unitPriceSnapshot;
+        this.sourcingType = src.sourcingType;
         this.quantity = src.quantity;
         this.reservedQuantity = src.reservedQuantity;
         this.fulfillmentSource = src.fulfillmentSource;

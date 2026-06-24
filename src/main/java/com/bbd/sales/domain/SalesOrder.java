@@ -1,6 +1,6 @@
 package com.bbd.sales.domain;
 
-import com.bbd.sales.application.port.out.StockTransferLine;
+import com.bbd.sales.application.port.out.ShortfallLine;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -262,11 +262,14 @@ public class SalesOrder {
         this.status = deriveStatus();   // 아직 부족하면 BACKORDERED 유지(멱등 재시도 가능)
     }
 
-    /** 부족분 라인 = procurement 통지용. (approve 후 BACKORDERED면 이걸로 구매/생산 요청) */
-    public List<StockTransferLine> shortfallLines() {
+    /**
+     * 부족분 라인 = procurement 통지용. (approve 후 BACKORDERED면 이걸로 구매/생산 요청)
+     * sourcingType 스냅샷을 함께 실어 procurement 가 라인별로 BUY→발주 / MAKE→작업지시 로 분기하게 한다(null=폴백).
+     */
+    public List<ShortfallLine> shortfallLines() {
         return lines.stream()
                 .filter(l -> !l.fullyReserved())
-                .map(l -> new StockTransferLine(l.sku(), l.shortfall()))
+                .map(l -> new ShortfallLine(l.sku(), l.shortfall(), l.sourcingType()))
                 .toList();
     }
 

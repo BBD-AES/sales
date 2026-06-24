@@ -6,10 +6,14 @@ import java.util.Objects;
 /**
  * 출고 요청 라인. 도메인 값 객체.
  *
- * nameSnapshot / unitPriceSnapshot 은 "주문 시점의" 상품명·단가를 박제한 값이다.
+ * nameSnapshot / unitPriceSnapshot / sourcingType 은 "주문 시점의" 상품명·단가·조달구분을 박제한 값이다.
  * 상품 마스터가 나중에 바뀌어도 과거 주문 금액은 변하면 안 되므로 스냅샷으로 보관한다.
  * 스냅샷 원본을 어디서 가져오는지(상품/재고 컨텍스트)는 도메인이 알 바 아니고,
  * application 서비스가 out 포트(ItemPort)로 조회해 채워 넣는다.
+ *
+ * sourcingType(BUY/MAKE)은 부족분(백오더)을 procurement 로 보낼 때 라우팅 힌트로 쓰인다.
+ * item 매번 조회 없이 라인에서 바로 읽어 이벤트에 실으려고 생성 시점 스냅샷으로 박제한다.
+ * null 허용: 옛 데이터/조달구분 미제공 라인은 null(다운스트림이 item 마스터로 폴백).
  */
 public class SalesOrderLine {
 
@@ -17,6 +21,7 @@ public class SalesOrderLine {
     private final String sku;
     private final String nameSnapshot;
     private final BigDecimal unitPriceSnapshot;
+    private final SourcingType sourcingType; // 조달구분 스냅샷(BUY/MAKE). null = 미지정(폴백 대상)
     private final int quantity;
 
     // 라인레벨 충족추적: 재고 확보분 + 부족분 소스(confirm 에서 채워짐).
@@ -25,6 +30,11 @@ public class SalesOrderLine {
 
     public SalesOrderLine(int lineNo, String sku, String nameSnapshot,
                           BigDecimal unitPriceSnapshot, int quantity) {
+        this(lineNo, sku, nameSnapshot, unitPriceSnapshot, null, quantity);
+    }
+
+    public SalesOrderLine(int lineNo, String sku, String nameSnapshot,
+                          BigDecimal unitPriceSnapshot, SourcingType sourcingType, int quantity) {
         if (sku == null || sku.isBlank()) {
             throw new IllegalArgumentException("sku 는 필수입니다.");
         }
@@ -38,6 +48,7 @@ public class SalesOrderLine {
             throw new IllegalArgumentException("unitPriceSnapshot 는 0보다 커야 합니다." + unitPriceSnapshot);
         }
         this.unitPriceSnapshot = unitPriceSnapshot;
+        this.sourcingType = sourcingType; // null 허용(미지정 라우팅 힌트)
         this.quantity = quantity;
     }
 
@@ -87,6 +98,7 @@ public class SalesOrderLine {
     public String sku() { return sku; }
     public String nameSnapshot() { return nameSnapshot; }
     public BigDecimal unitPriceSnapshot() { return unitPriceSnapshot; }
+    public SourcingType sourcingType() { return sourcingType; }
     public int quantity() { return quantity; }
     public int reservedQuantity() { return reservedQuantity; }
     public FulfillmentSource fulfillmentSource() { return fulfillmentSource; }

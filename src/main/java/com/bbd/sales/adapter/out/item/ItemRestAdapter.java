@@ -3,6 +3,7 @@ package com.bbd.sales.adapter.out.item;
 import com.bbd.sales.adapter.out.item.dto.ItemApiResponse;
 import com.bbd.sales.application.port.out.ItemPort;
 import com.bbd.sales.application.port.out.ProductSnapshot;
+import com.bbd.sales.domain.SourcingType;
 import com.bbd.sales.global.error.ApiException;
 import com.bbd.sales.global.error.dto.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -33,12 +34,26 @@ public class ItemRestAdapter implements ItemPort {
                     r.sku(),
                     r.name(),
                     BigDecimal.valueOf(r.unitPrice()), // item int(원) -> sales BigDecimal
-                    r.active()
+                    r.active(),
+                    parseSourcingType(r.sourcingType()) // "BUY"/"MAKE"/null → enum (불명값은 null로 관대 처리)
             );
         } catch (HttpClientErrorException.NotFound e) {
             // item 404 = 존재하지 않는 SKU(클라 입력 오류) -> 4xx 로 번역. 서버 결함(500)으로 뜨지 않도록.
             throw new ApiException(ErrorCode.ITEM_NOT_FOUND, "존재하지 않는 SKU: " + sku);
         }
         // 404 외 4xx(401/403 등)·5xx·연결실패는 그대로 전파(ITEM_NOT_FOUND로 오표기 금지). 주문 생성 실패(빠른 실패).
+    }
+
+    /**
+     * item 의 sourcingType 문자열을 enum 으로. null/공백/미지의 값이면 null 반환(라우팅 힌트는 best-effort —
+     * 알 수 없으면 다운스트림이 item 마스터로 폴백하므로, 여기서 예외로 주문 생성을 막지 않는다).
+     */
+    private SourcingType parseSourcingType(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        try {
+            return SourcingType.valueOf(raw.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return null; // 계약 밖 값 → 미지정 취급(빠른 실패 대상 아님)
+        }
     }
 }

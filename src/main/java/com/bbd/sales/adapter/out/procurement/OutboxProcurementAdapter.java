@@ -3,7 +3,7 @@ package com.bbd.sales.adapter.out.procurement;
 import com.bbd.sales.adapter.out.event.OutboxEvent;
 import com.bbd.sales.adapter.out.event.OutboxRepository;
 import com.bbd.sales.application.port.out.ProcurementPort;
-import com.bbd.sales.application.port.out.StockTransferLine;
+import com.bbd.sales.application.port.out.ShortfallLine;
 import com.bbd.sales.global.error.ApiException;
 import com.bbd.sales.global.error.dto.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -33,12 +33,15 @@ public class OutboxProcurementAdapter implements ProcurementPort {
     private final ObjectMapper objectMapper; // Boot 자동 구성 빈(FAIL_ON_UNKNOWN_PROPERTIES off)
 
     @Override
-    public void requestPurchase(String soNumber, String destinationWarehouseCode, List<StockTransferLine> lines) {
+    public void requestPurchase(String soNumber, String destinationWarehouseCode, List<ShortfallLine> lines) {
         // #55 CS-4: eventId 를 결정적 키로(주문당 PR 1건). 호출별 랜덤 UUID 였을 때는 재발행/재시도가
         //           컨슈머에 서로 다른 eventId 로 보여 PO 중복(=돈) 위험. soNumber 앵커로 멱등 보장.
         String eventId = "PR:" + soNumber;
         List<PurchaseRequested.Line> eventLines = lines.stream()
-                .map(l -> new PurchaseRequested.Line(l.sku(), l.quantity()))
+                // sourcingType 은 enum -> 계약 문자열("BUY"/"MAKE"). null 이면 그대로 null(procurement 가 item 마스터로 폴백).
+                .map(l -> new PurchaseRequested.Line(
+                        l.sku(), l.quantity(),
+                        l.sourcingType() == null ? null : l.sourcingType().name()))
                 .toList();
         var event = new PurchaseRequested(
                 eventId, SOURCE, EVENT_TYPE, Instant.now().toString(),

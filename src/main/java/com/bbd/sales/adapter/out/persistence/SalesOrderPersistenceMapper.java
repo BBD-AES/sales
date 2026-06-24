@@ -39,7 +39,7 @@ public class SalesOrderPersistenceMapper {
         List<SalesOrderLineJpaEntity> lineEntities = so.lines().stream()
                 .map(l -> {
                     SalesOrderLineJpaEntity le = new SalesOrderLineJpaEntity(
-                            l.lineNo(), l.sku(), l.nameSnapshot(), l.unitPriceSnapshot(), l.quantity());
+                            l.lineNo(), l.sku(), l.nameSnapshot(), l.unitPriceSnapshot(), l.sourcingType(), l.quantity());
                     le.setReservedQuantity(l.reservedQuantity());
                     le.setFulfillmentSource(l.fulfillmentSource());
                     return le;
@@ -53,7 +53,8 @@ public class SalesOrderPersistenceMapper {
                 .sorted(Comparator.comparingInt(SalesOrderLineJpaEntity::getLineNo))
                 .map(l -> {
                     SalesOrderLine line = new SalesOrderLine(
-                            l.getLineNo(), l.getSku(), l.getNameSnapshot(), l.getUnitPriceSnapshot(), l.getQuantity());
+                            l.getLineNo(), l.getSku(), l.getNameSnapshot(), l.getUnitPriceSnapshot(),
+                            l.getSourcingType(), l.getQuantity());
                     line.restore(l.getReservedQuantity(), l.getFulfillmentSource());  // 저장 상태 복원(파생X)
                     return line;
                 })
