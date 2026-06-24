@@ -23,8 +23,8 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create
-#      ddl-auto: update
+#      ddl-auto: create
+      ddl-auto: update
     defer-datasource-initialization: ${DEFER_DATASOURCE_INITIALIZATION:true}
     show-sql: false
     properties:
@@ -37,8 +37,8 @@ spring:
 
   sql:
     init:
-      mode: never
-#      mode: ${SQL_INIT_MODE:always}
+#      mode: never
+      mode: ${SQL_INIT_MODE:always}
       encoding: UTF-8
 
   kafka:
