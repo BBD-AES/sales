@@ -37,4 +37,19 @@ public class HqNotificationListener {
             log.warn("[notify] HQ 알림 생성 실패(무시) so={}", ev.soNumber(), e);
         }
     }
+
+    /** 백오더(재고 부족) 발생 시 HQ 자가알림. submit 알림과 동일하게 AFTER_COMMIT + REQUIRES_NEW best-effort. */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onBackordered(SalesOrderBackorderedEvent ev) {
+        try {
+            notifications.save(new Notification(
+                    "HQ_MANAGER", ev.soNumber(),
+                    "출고요청 " + ev.soNumber() + " 백오더 — 재고 부족, 충당 대기", ev.eventId()
+            ));
+            log.info("[notify] HQ 백오더 알림 생성 so={}", ev.soNumber());
+        } catch (RuntimeException e) {
+            log.warn("[notify] HQ 백오더 알림 생성 실패(무시) so={}", ev.soNumber(), e);
+        }
+    }
 }
