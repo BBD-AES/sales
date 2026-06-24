@@ -3,6 +3,7 @@ package com.bbd.sales.adapter.out.event;
 import com.bbd.sales.application.port.out.SalesOrderEventPublisher;
 import com.bbd.sales.global.error.ApiException;
 import com.bbd.sales.global.error.dto.ErrorCode;
+import com.bbd.sales.notification.SalesOrderBackorderedEvent;
 import com.bbd.sales.notification.SalesOrderSubmittedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -33,6 +34,12 @@ public class OutboxSalesOrderEventPublisher implements SalesOrderEventPublisher 
     public void publishSubmitted(String soNumber) {
         // #65: 내부 전용 알림 → Kafka outbox 대신 in-process 이벤트. 리스너가 submit 커밋 후(AFTER_COMMIT) best-effort 로 생성(핵심 전이 비차단).
         events.publishEvent(new SalesOrderSubmittedEvent(soNumber, UUID.randomUUID().toString()));
+    }
+
+    @Override
+    public void publishBackordered(String soNumber) {
+        // submit 알림과 동일 패턴: 내부 전용 in-process 이벤트. 리스너가 AFTER_COMMIT best-effort 로 HQ 알림 생성(핵심 전이 비차단).
+        events.publishEvent(new SalesOrderBackorderedEvent(soNumber, UUID.randomUUID().toString()));
     }
 
     @Override

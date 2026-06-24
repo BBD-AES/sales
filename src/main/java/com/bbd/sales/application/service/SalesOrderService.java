@@ -275,6 +275,10 @@ public class SalesOrderService implements SalesOrderUseCase {
         if (!shortfall.isEmpty()) {
             procurementPort.requestPurchase(so.soNumber(), so.toWarehouseCode(), shortfall);
         }
+        // 부족분으로 BACKORDERED 가 되면 HQ 자가알림(best-effort, AFTER_COMMIT — 핵심 전이 비차단).
+        if (so.status() == SalesOrderStatus.BACKORDERED) {
+            eventPublisher.publishBackordered(so.soNumber());
+        }
         return statusChange(so, user.employeeNumber(), so.approvedAt(), null);
     }
 
