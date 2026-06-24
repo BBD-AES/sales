@@ -279,6 +279,10 @@ public class SalesOrderService implements SalesOrderUseCase {
         if (so.status() == SalesOrderStatus.BACKORDERED) {
             eventPublisher.publishBackordered(so.soNumber());
         }
+        // 전량 예약돼 IN_FULFILLMENT 가 되면 도착 지점에 '곧 입고' 자가알림(targetRole=지점 창고명, 이름축).
+        if (so.status() == SalesOrderStatus.IN_FULFILLMENT) {
+            eventPublisher.publishInFulfillment(so.soNumber(), so.toWarehouseName());
+        }
         return statusChange(so, user.employeeNumber(), so.approvedAt(), null);
     }
 

@@ -4,6 +4,7 @@ import com.bbd.sales.application.port.out.SalesOrderEventPublisher;
 import com.bbd.sales.global.error.ApiException;
 import com.bbd.sales.global.error.dto.ErrorCode;
 import com.bbd.sales.notification.SalesOrderBackorderedEvent;
+import com.bbd.sales.notification.SalesOrderInFulfillmentEvent;
 import com.bbd.sales.notification.SalesOrderSubmittedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -40,6 +41,12 @@ public class OutboxSalesOrderEventPublisher implements SalesOrderEventPublisher 
     public void publishBackordered(String soNumber) {
         // submit 알림과 동일 패턴: 내부 전용 in-process 이벤트. 리스너가 AFTER_COMMIT best-effort 로 HQ 알림 생성(핵심 전이 비차단).
         events.publishEvent(new SalesOrderBackorderedEvent(soNumber, UUID.randomUUID().toString()));
+    }
+
+    @Override
+    public void publishInFulfillment(String soNumber, String branchWarehouseName) {
+        // 도착 지점 대상 내부 알림 → in-process 이벤트. 리스너가 AFTER_COMMIT best-effort 로 지점 알림 생성(핵심 전이 비차단).
+        events.publishEvent(new SalesOrderInFulfillmentEvent(soNumber, branchWarehouseName, UUID.randomUUID().toString()));
     }
 
     @Override

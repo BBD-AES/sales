@@ -10,6 +10,9 @@ public interface SalesOrderEventPublisher {
     /** 승인 결과 부족분 발생(SUBMITTED→BACKORDERED) → HQ 자가알림(in-process). 비핵심 read-model, best-effort. */
     void publishBackordered(String soNumber);
 
+    /** 승인 결과 전량 예약(SUBMITTED→IN_FULFILLMENT) → 도착 지점 자가알림(in-process). 비핵심 read-model, best-effort. */
+    void publishInFulfillment(String soNumber, String branchWarehouseName);
+
     /** 수령 확정(receive) → 토픽 sales.order.received. inventory가 구독해 해당 soNumber의 예약분을 출고(issue). */
     void publishReceived(String soNumber);
 }
