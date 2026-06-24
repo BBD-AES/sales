@@ -23,6 +23,7 @@ public class SalesOrderPersistenceMapper {
         entity.setStatus(so.status());
         entity.setPriority(so.priority());
         entity.setNote(so.note());
+        entity.setCustomerOrderNumber(so.customerOrderNumber());
         entity.setRequestedBy(so.requestedBy());
         entity.setApprovedBy(so.approvedBy());
         entity.setRejectedBy(so.rejectedBy());
@@ -61,7 +62,7 @@ public class SalesOrderPersistenceMapper {
         return SalesOrder.reconstitute(
                 e.getSoNumber(),
                 e.getToWarehouseCode(), e.getToWarehouseName(),
-                e.getStatus(), e.getPriority(), e.getNote(), lines,
+                e.getStatus(), e.getPriority(), e.getNote(), e.getCustomerOrderNumber(), lines,
                 e.getRequestedBy(), e.getApprovedBy(), e.getRejectedBy(),
                 e.getReceivedBy(), e.getCanceledBy(), e.getRejectedReason(),
                 e.getRequestedAt(), e.getApprovedAt(), e.getRejectedAt(),

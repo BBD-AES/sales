@@ -38,6 +38,7 @@ public class SalesOrder {
     private SalesOrderStatus status;
     private SalesOrderPriority priority;
     private String note;
+    private String customerOrderNumber;   // 연계 고객주문(CO) 번호 — 선택. STR 작성 시 고정(불변).
 
     private final List<SalesOrderLine> lines = new ArrayList<>();
 
@@ -70,10 +71,24 @@ public class SalesOrder {
                                      List<SalesOrderLine> lines,
                                      String requesterEmployeeNumber,
                                      LocalDateTime now) {
+        return request(soNumber, toWarehouseCode, toWarehouseName, priority, note, null,
+                lines, requesterEmployeeNumber, now);
+    }
+
+    /** 연계 고객주문(customerOrderNumber, 선택)을 함께 기록하는 변형. STR 이 어느 CO 를 채우는지 추적. */
+    public static SalesOrder request(String soNumber,
+                                     String toWarehouseCode, String toWarehouseName,
+                                     SalesOrderPriority priority,
+                                     String note,
+                                     String customerOrderNumber,
+                                     List<SalesOrderLine> lines,
+                                     String requesterEmployeeNumber,
+                                     LocalDateTime now) {
         validateLines(lines, "출고 요청 라인은 최소 1개 이상이어야 합니다.");
         SalesOrder so = new SalesOrder(soNumber, toWarehouseCode, toWarehouseName);
         so.priority = priority == null ? SalesOrderPriority.NORMAL : priority;
         so.note = note;
+        so.customerOrderNumber = customerOrderNumber;
         so.lines.addAll(lines);
         so.status = SalesOrderStatus.REQUESTED;
         so.requestedBy = requesterEmployeeNumber;
@@ -90,10 +105,26 @@ public class SalesOrder {
                                           String receivedBy, String canceledBy, String rejectedReason,
                                           LocalDateTime requestedAt, LocalDateTime approvedAt, LocalDateTime rejectedAt,
                                           LocalDateTime receivedAt, LocalDateTime canceledAt) {
+        return reconstitute(soNumber, toWarehouseCode, toWarehouseName, status, priority, note, null,
+                lines, requestedBy, approvedBy, rejectedBy, receivedBy, canceledBy, rejectedReason,
+                requestedAt, approvedAt, rejectedAt, receivedAt, canceledAt);
+    }
+
+    /** 연계 고객주문(customerOrderNumber) 포함 복원. */
+    public static SalesOrder reconstitute(String soNumber,
+                                          String toWarehouseCode, String toWarehouseName,
+                                          SalesOrderStatus status, SalesOrderPriority priority, String note,
+                                          String customerOrderNumber,
+                                          List<SalesOrderLine> lines,
+                                          String requestedBy, String approvedBy, String rejectedBy,
+                                          String receivedBy, String canceledBy, String rejectedReason,
+                                          LocalDateTime requestedAt, LocalDateTime approvedAt, LocalDateTime rejectedAt,
+                                          LocalDateTime receivedAt, LocalDateTime canceledAt) {
         SalesOrder so = new SalesOrder(soNumber, toWarehouseCode, toWarehouseName);
         so.status = status;
         so.priority = priority;
         so.note = note;
+        so.customerOrderNumber = customerOrderNumber;
         if (lines != null) so.lines.addAll(lines);
         so.requestedBy = requestedBy;
         so.approvedBy = approvedBy;
@@ -317,6 +348,7 @@ public class SalesOrder {
     public SalesOrderStatus status() { return status; }
     public SalesOrderPriority priority() { return priority; }
     public String note() { return note; }
+    public String customerOrderNumber() { return customerOrderNumber; }
     public List<SalesOrderLine> lines() { return Collections.unmodifiableList(lines); }
     public String requestedBy() { return requestedBy; }
     public String approvedBy() { return approvedBy; }

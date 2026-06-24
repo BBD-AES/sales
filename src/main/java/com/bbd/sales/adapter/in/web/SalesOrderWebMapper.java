@@ -43,6 +43,7 @@ public class SalesOrderWebMapper {
                 req.toWarehouseCode(),
                 req.priority(),
                 req.note(),
+                req.customerOrderNumber(),
                 toLineCommands(req.lines()),
                 idempotencyKey);
     }
@@ -94,7 +95,7 @@ public class SalesOrderWebMapper {
                 r.status(), r.priority(),
                 r.requestedBy(), r.approvedBy(), r.receivedBy(), r.canceledBy(),
                 r.requestedAt(), r.approvedAt(), r.receivedAt(), r.canceledAt(),
-                r.rejectedReason(), r.totalAmount(), r.note(),
+                r.rejectedReason(), r.totalAmount(), r.note(), r.customerOrderNumber(),
                 r.lines().stream().map(this::toLineResponse).toList());
     }
 

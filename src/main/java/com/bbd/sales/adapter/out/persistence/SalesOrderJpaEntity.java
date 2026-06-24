@@ -47,6 +47,9 @@ public class SalesOrderJpaEntity {
     @Column(length = 1000)
     private String note;
 
+    @Column(name = "customer_order_number", length = 40)
+    private String customerOrderNumber;   // 연계 고객주문(CO) 번호 — 선택. STR 이 어느 CO 를 채우는지.
+
     private String requestedBy;
     private String approvedBy;
     private String rejectedBy;
