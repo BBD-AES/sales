@@ -1,5 +1,6 @@
 package com.bbd.sales.notification;
 
+import com.bbd.sales.application.port.out.SalesOrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -13,6 +14,7 @@ import tools.jackson.databind.ObjectMapper;
 public class StockReplenishedListener {
 
     private final NotificationRepository notifications;
+    private final SalesOrderRepository salesOrders; // 연계 SO 의 도착 지점명 해석(지점 입고 알림 대상)
     private final ObjectMapper objectMapper;
 
     @KafkaListener(topics = "inventory.stock-replenished", groupId = "sales-backorder")
@@ -40,5 +42,21 @@ public class StockReplenishedListener {
         } catch (DataIntegrityViolationException dup) {
             log.debug("[notify] 중복 이벤트 무시 eventId={}", ev.eventId());
         }
+        // 도착 지점에도 입고 알림(targetRole=지점 창고명, 이름축). eventId 는 ":branch" 접미사로 HQ 행과 구분(UNIQUE).
+        // 상단 existsByEventId(ev.eventId()) 가드가 재배달 시 HQ·지점 둘 다 막아 멱등 보장.
+        salesOrders.findBySoNumber(ev.soNumber()).ifPresent(so -> {
+            if (so.toWarehouseName() == null || so.toWarehouseName().isBlank()) {
+                return;
+            }
+            try {
+                notifications.save(new Notification(
+                        so.toWarehouseName(), ev.soNumber(),
+                        "출고요청 " + ev.soNumber() + " 재고 보충 도착 — 입고 진행", ev.eventId() + ":branch"
+                ));
+                log.info("[notify] 지점 보충 알림 so={} branch={}", ev.soNumber(), so.toWarehouseName());
+            } catch (DataIntegrityViolationException dup) {
+                log.debug("[notify] 지점 보충 알림 중복 무시 so={}", ev.soNumber());
+            }
+        });
     }
 }
