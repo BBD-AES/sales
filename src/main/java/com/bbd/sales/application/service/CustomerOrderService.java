@@ -139,11 +139,14 @@ public class CustomerOrderService implements CustomerOrderUseCase {
     }
 
     @Override
-    public CustomerOrderStatusChangeResult close(String coNumber) {
+    public CustomerOrderStatusChangeResult close(String coNumber, String idempotencyKey) {
         CurrentUser currentUser = currentUserProvider.current();
         CustomerOrder co = load(coNumber);
         authorizeOwnerWrite(co, currentUser);
         co.close(currentUser.employeeNumber(), LocalDateTime.now()); // CONFIRMED→CLOSED 검증·전이(비CONFIRMED 면 NOT_CLOSABLE)
+        // [멱등 #10] create 와 동일하게 sales 레이어 가드 추가 — 키 없으면 no-op. 모바일이 Idempotency-Key=coNumber 로 보내면
+        //   uk_idempotency_key UNIQUE(키 단독)로 'CO당 close 1회' 직렬화(동시 close 2건/재시도 차단). inventory referenceNumber dedup 과 2층 방어.
+        idempotencyGuard.record(IdempotencyGuard.CO_CLOSE, currentUser.employeeNumber(), idempotencyKey, coNumber);
         // #69: 종료 = 고객 인도 = 지점재고 물리 차감. inventory 동기 호출 → 부족 시 예외 → @Transactional 롤백(save 미호출) → 종료 안 됨.
         //  재고는 sync 원칙(예약과 동일 TOCTOU; 지점재고는 HQ 예약과 공유 자원이라 async 면 오버셀).
         // [동시성/멱등] close 에 비관락을 '안' 건다 — 외부효과가 동기 REST 라, 락을 걸면 #55 가 reserveLine 에서 제거한 '락-중-네트워크IO'를

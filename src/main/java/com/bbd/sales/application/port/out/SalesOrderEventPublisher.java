@@ -7,6 +7,9 @@ package com.bbd.sales.application.port.out;
 public interface SalesOrderEventPublisher {
     void publishSubmitted(String soNumber);
 
+    /** 출고요청 생성(REQUESTED) → 요청 지점 자가알림(in-process). 점장 '제출 검토' 유도. 비핵심 read-model, best-effort. */
+    void publishRequested(String soNumber, String branchWarehouseName);
+
     /** 승인 결과 부족분 발생(SUBMITTED→BACKORDERED) → HQ 자가알림(in-process). 비핵심 read-model, best-effort. */
     void publishBackordered(String soNumber);
 

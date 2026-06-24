@@ -397,7 +397,7 @@ class CustomerOrderServiceTest {
         when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(co));
         when(repository.save(co)).thenReturn(co);
 
-        CustomerOrderStatusChangeResult result = service.close("CO-2026-0001");
+        CustomerOrderStatusChangeResult result = service.close("CO-2026-0001", null);
 
         assertThat(co.status()).isEqualTo(CustomerOrderStatus.CLOSED);
         assertThat(co.closedBy()).isEqualTo("BR003");
@@ -427,7 +427,7 @@ class CustomerOrderServiceTest {
         when(currentUserProvider.current()).thenReturn(BRANCH);
         when(repository.findByCoNumber("CO-2026-0001")).thenReturn(Optional.of(co));
 
-        assertThatThrownBy(() -> service.close("CO-2026-0001"))
+        assertThatThrownBy(() -> service.close("CO-2026-0001", null))
                 .isInstanceOf(CustomerOrderStateException.class)
                 .extracting("violation")
                 .isEqualTo(CustomerOrderStateException.Violation.NOT_CLOSABLE);
@@ -447,7 +447,7 @@ class CustomerOrderServiceTest {
         doThrow(new ApiException(ErrorCode.CUSTOMER_ORDER_STOCK_INSUFFICIENT))
                 .when(inventoryPort).shipForCustomerOrder(eq("CO-2026-0001"), anyList());
 
-        assertThatThrownBy(() -> service.close("CO-2026-0001"))
+        assertThatThrownBy(() -> service.close("CO-2026-0001", null))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CUSTOMER_ORDER_STOCK_INSUFFICIENT);

@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 public class IdempotencyGuard {
 
     public static final String CO_CREATE = "CO_CREATE";
+    public static final String CO_CLOSE = "CO_CLOSE"; // #10: 종료(=재고차감) 멱등 — 키=coNumber 권장(CO당 close 1회 직렬화)
     public static final String SO_CREATE = "SO_CREATE";
     private static final String UNIQUE_CONSTRAINT = "uk_idempotency_key";
 
