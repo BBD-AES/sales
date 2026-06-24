@@ -168,7 +168,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         SalesOrder so = SalesOrder.request(
                 soNumber,
                 command.toWarehouseCode(), toName,
-                command.priority(), command.note(), lines,
+                command.priority(), command.note(), command.customerOrderNumber(), lines,
                 user.employeeNumber(), LocalDateTime.now());
 
         SalesOrder saved = repository.save(so);
@@ -418,7 +418,7 @@ public class SalesOrderService implements SalesOrderUseCase {
                 so.status(), so.priority(),
                 so.requestedBy(), so.approvedBy(), so.receivedBy(), so.canceledBy(),
                 so.requestedAt(), so.approvedAt(), so.receivedAt(), so.canceledAt(),
-                so.rejectedReason(), so.totalAmount(), so.note(),
+                so.rejectedReason(), so.totalAmount(), so.note(), so.customerOrderNumber(),
                 lines);
     }
 
