@@ -40,8 +40,9 @@ public class NotificationController {
     @GetMapping
     public List<Notification> inbox() {
         String bucket = callerBucket(currentUserProvider.current());
+        // 최근 100건(읽음·안읽음 모두) 반환 — FE 가 read 플래그로 안읽음/읽음을 구분 표시(읽은 알림도 dim 으로 남김).
         return bucket == null ? List.of()
-                : notifications.findTop100ByTargetRoleAndReadFalseOrderByIdDesc(bucket);
+                : notifications.findTop100ByTargetRoleOrderByIdDesc(bucket);
     }
 
     /**
