@@ -39,6 +39,11 @@ public class Notification {
         this.createdAt = Instant.now();
     }
 
+    /** 알림함에서 항목을 열람(클릭)하면 읽음 처리. read-model 갱신이라 멱등(이미 read 여도 안전)·best-effort. */
+    public void markAsRead() {
+        this.read = true;
+    }
+
     public Long getId() {
         return id;
     }
