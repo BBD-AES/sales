@@ -174,6 +174,8 @@ public class SalesOrderService implements SalesOrderUseCase {
         SalesOrder saved = repository.save(so);
         // 멱등 표준: 생성 성공 후 키 기록. 동시 같은 키면 UNIQUE 충돌 → 409(IDEM001) → @Transactional 롤백. DB UNIQUE 가 정확성 최종 보루.
         idempotencyGuard.record(IdempotencyGuard.SO_CREATE, user.employeeNumber(), command.idempotencyKey(), saved.soNumber());
+        // 요청 지점(점장)에 '제출 검토 요망' 자가알림 — approve()의 IN_FULFILLMENT 발행과 대칭. best-effort.
+        eventPublisher.publishRequested(saved.soNumber(), saved.toWarehouseName());
         return toResult(saved);
     }
 
