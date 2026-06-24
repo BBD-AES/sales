@@ -26,15 +26,25 @@ public class Notification {
     private boolean read;
     @Column(nullable = false)
     private Instant createdAt;
+    private String category; // FE 알림함 탭 필터용. null=미분류(전체 탭에만).
+
+    /** 알림함 탭 카테고리 — SALES=영업(submit·입고 보충), PROCUREMENT=구매(backorder). HQ 를 나누지 않고 알림 종류로 탭 필터. */
+    public static final String CAT_SALES = "SALES";
+    public static final String CAT_PROCUREMENT = "PROCUREMENT";
 
     protected Notification() {
     }
 
     public Notification(String targetRole, String soNumber, String message, String eventId) {
+        this(targetRole, soNumber, message, eventId, null);
+    }
+
+    public Notification(String targetRole, String soNumber, String message, String eventId, String category) {
         this.targetRole = targetRole;
         this.soNumber = soNumber;
         this.message = message;
         this.eventId = eventId;
+        this.category = category;
         this.read = false;
         this.createdAt = Instant.now();
     }
@@ -66,5 +76,9 @@ public class Notification {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public String getCategory() {
+        return category;
     }
 }

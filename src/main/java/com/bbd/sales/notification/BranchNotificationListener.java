@@ -32,7 +32,7 @@ public class BranchNotificationListener {
         try {
             notifications.save(new Notification(
                     ev.branchWarehouseName(), ev.soNumber(),
-                    "출고요청 " + ev.soNumber() + " 본사 승인·예약 완료 — 곧 입고 예정", ev.eventId()
+                    "출고요청 " + ev.soNumber() + " 본사 승인·예약 완료 — 곧 입고 예정", ev.eventId(), Notification.CAT_SALES
             ));
             log.info("[notify] 지점 IN_FULFILLMENT 알림 생성 so={} branch={}", ev.soNumber(), ev.branchWarehouseName());
         } catch (RuntimeException e) {

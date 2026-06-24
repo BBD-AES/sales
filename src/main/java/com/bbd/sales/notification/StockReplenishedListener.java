@@ -36,7 +36,7 @@ public class StockReplenishedListener {
             notifications.save(new Notification(
                     "HQ_MANAGER", ev.soNumber(),
                     "백오더 재고 보충 도착 SO=" + ev.soNumber() + " — 충족(fulfillBackorder) 처리하세요",
-                    ev.eventId()
+                    ev.eventId(), Notification.CAT_SALES
             ));
             log.info("[notify] 백오더 보충 알림 so={}", ev.soNumber());
         } catch (DataIntegrityViolationException dup) {
@@ -51,7 +51,7 @@ public class StockReplenishedListener {
             try {
                 notifications.save(new Notification(
                         so.toWarehouseName(), ev.soNumber(),
-                        "출고요청 " + ev.soNumber() + " 재고 보충 도착 — 입고 진행", ev.eventId() + ":branch"
+                        "출고요청 " + ev.soNumber() + " 재고 보충 도착 — 입고 진행", ev.eventId() + ":branch", Notification.CAT_SALES
                 ));
                 log.info("[notify] 지점 보충 알림 so={} branch={}", ev.soNumber(), so.toWarehouseName());
             } catch (DataIntegrityViolationException dup) {

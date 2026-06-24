@@ -29,7 +29,7 @@ public class HqNotificationListener {
         try {
             notifications.save(new Notification(
                     "HQ_MANAGER", ev.soNumber(),
-                    "출고요청 " + ev.soNumber() + " 본사 검토 대기", ev.eventId()
+                    "출고요청 " + ev.soNumber() + " 본사 검토 대기", ev.eventId(), Notification.CAT_SALES
             ));
             log.info("[notify] HQ 알림 생성 so={}", ev.soNumber());
         } catch (RuntimeException e) {
@@ -45,7 +45,7 @@ public class HqNotificationListener {
         try {
             notifications.save(new Notification(
                     "HQ_MANAGER", ev.soNumber(),
-                    "출고요청 " + ev.soNumber() + " 백오더 — 재고 부족, 충당 대기", ev.eventId()
+                    "출고요청 " + ev.soNumber() + " 백오더 — 재고 부족, 충당 대기", ev.eventId(), Notification.CAT_PROCUREMENT
             ));
             log.info("[notify] HQ 백오더 알림 생성 so={}", ev.soNumber());
         } catch (RuntimeException e) {
