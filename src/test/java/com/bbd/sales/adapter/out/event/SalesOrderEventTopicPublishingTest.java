@@ -139,7 +139,7 @@ class SalesOrderEventTopicPublishingTest {
         //    purchase-requested(PurchaseRequested)/stock-replenished(StockReplenished)는 스키마가 달라
         //    더미 발행하지 않는다(공유 브로커에 잘못된 페이로드 오염 방지). 생성/존재만 보장한다.
         var message = new SalesOrderEventMessage(
-                UUID.randomUUID().toString(), "received", SO_NUMBER, Instant.now().toString());
+                UUID.randomUUID().toString(), "received", SO_NUMBER, Instant.now().toString(), "WH-BR-001");
         String payload = objectMapper.writeValueAsString(message); // Jackson3 unchecked
         var metadata = kafkaTemplate.send(TOPIC_RECEIVED, SO_NUMBER, payload)
                 .get(15, TimeUnit.SECONDS)

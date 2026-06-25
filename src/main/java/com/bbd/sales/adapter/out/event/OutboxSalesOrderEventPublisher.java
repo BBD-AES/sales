@@ -50,13 +50,14 @@ public class OutboxSalesOrderEventPublisher implements SalesOrderEventPublisher 
     }
 
     @Override
-    public void publishReceived(String soNumber) {
-        enqueue("received", soNumber); // 토픽 sales.order.received, key=soNumber → inventory가 구독해 issue
+    public void publishReceived(String soNumber, String toWarehouseCode) {
+        // 토픽 sales.order.received, key=soNumber → inventory가 구독해 출처 예약분 issue(OUT) + 도착 지점 입고(IN).
+        enqueue("received", soNumber, toWarehouseCode);
     }
 
-    private void enqueue(String eventType, String soNumber) {
+    private void enqueue(String eventType, String soNumber, String toWarehouseCode) {
         String eventId = UUID.randomUUID().toString();
-        var msg = new SalesOrderEventMessage(eventId, eventType, soNumber, Instant.now().toString());
+        var msg = new SalesOrderEventMessage(eventId, eventType, soNumber, Instant.now().toString(), toWarehouseCode);
         // try-catch 하지 않아도 됨. 컴파일러가 예외를 강제하지 않는 Jackson 3 Json 3 JacksonException 이므로.
         // 실패하면 unchecked 예외가 그대로 위로 전파 -> submit()의 @Transactional이 롤백 -> GlobalExceptionHandler가 처리(기본 500)
         // 오직 에러코드만 명확히 하고 싶어서 ApiException으로 감싸서 던짐.

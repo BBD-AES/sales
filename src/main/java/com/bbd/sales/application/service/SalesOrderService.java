@@ -333,10 +333,11 @@ public class SalesOrderService implements SalesOrderUseCase {
         so.receive(currentUser.employeeNumber(), LocalDateTime.now()); // APPROVED 검증은 도메인이
         repository.save(so);
 
-        // 출고(예약분 차감)는 이벤트로: sales.order.received 발행 → inventory가 구독해 해당 soNumber의 예약분을 issue.
+        // 출고(예약분 차감)는 이벤트로: sales.order.received 발행 → inventory가 구독해 해당 soNumber의 예약분을 issue(출처 OUT)하고
+        // 도착 지점(toWarehouseCode)에 입고(IN) 적재한다. toWarehouseCode 를 함께 실어야 목적지 지점 재고가 증가한다.
         // 트랜잭셔널 아웃박스(SO 저장과 같은 커밋). 예약은 approve 때 이미 동기 확정돼 오버셀 위험 없음 → 출고는 비동기 안전.
         // (동기 issue REST 경로 inventoryPort.transferForSalesOrderReceive 도 존재하나, 표준 receive는 이벤트만 사용 — 이중차감 방지.)
-        eventPublisher.publishReceived(so.soNumber());
+        eventPublisher.publishReceived(so.soNumber(), so.toWarehouseCode());
 
         return statusChange(so, currentUser.employeeNumber(), so.receivedAt(), null);
     }
