@@ -37,9 +37,9 @@ spring:
 
   sql:
     init:
-#      mode: never
-      mode: ${SQL_INIT_MODE:always}
-      encoding: UTF-8
+      mode: never
+#      mode: ${SQL_INIT_MODE:always}
+#      encoding: UTF-8
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka.inwoohub.com:9092}
