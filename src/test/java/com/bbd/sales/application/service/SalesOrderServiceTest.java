@@ -285,7 +285,7 @@ class SalesOrderServiceTest {
         service.receive("SO-1");
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.RECEIVED);
-        verify(eventPublisher).publishReceived("SO-1");
+        verify(eventPublisher).publishReceived("SO-1", "WH-BR-001"); // 도착 지점(목적지)까지 전달 — inventory IN 적재용
     }
 
     @Test
@@ -297,7 +297,7 @@ class SalesOrderServiceTest {
         when(currentUserProvider.current()).thenReturn(STAFF);
         when(repository.findBySoNumber("SO-1")).thenReturn(Optional.of(so));
         doThrow(new RuntimeException("outbox down"))
-                .when(eventPublisher).publishReceived("SO-1");
+                .when(eventPublisher).publishReceived("SO-1", "WH-BR-001");
 
         assertThatThrownBy(() -> service.receive("SO-1"))
                 .isInstanceOf(RuntimeException.class);
@@ -331,7 +331,7 @@ class SalesOrderServiceTest {
 
         InOrder ordered = inOrder(repository, eventPublisher);
         ordered.verify(repository).lockForUpdate("SO-1");
-        ordered.verify(eventPublisher).publishReceived("SO-1");
+        ordered.verify(eventPublisher).publishReceived("SO-1", "WH-BR-001");
     }
 
     // === 읽기 스코핑 ===
@@ -464,7 +464,7 @@ class SalesOrderServiceTest {
 
         assertThatThrownBy(() -> service.receive("SO-1"))
                 .isInstanceOf(ApiException.class);
-        verify(eventPublisher, never()).publishReceived(any());
+        verify(eventPublisher, never()).publishReceived(any(), any());
         verify(repository, never()).lockForUpdate(any()); // 소유권 인가 실패 → 락 미획득(인가가 락 전). CodeRabbit #55.
     }
 
