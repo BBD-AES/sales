@@ -21,6 +21,6 @@ public interface CustomerOrderUseCase {
 
     CustomerOrderStatusChangeResult cancel(String coNumber);
 
-    CustomerOrderStatusChangeResult close(String coNumber);
+    CustomerOrderStatusChangeResult close(String coNumber, String idempotencyKey);
 
 }

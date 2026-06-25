@@ -21,6 +21,25 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class BranchNotificationListener {
     private final NotificationRepository notifications;
 
+    /** 출고요청 생성(REQUESTED) → 요청 지점에 '제출 검토 요망' 자가알림(점장 열람). */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onRequested(SalesOrderRequestedEvent ev) {
+        if (ev.branchWarehouseName() == null || ev.branchWarehouseName().isBlank()) {
+            log.warn("[notify] REQUESTED 지점명 없음 — 지점 알림 생략 so={}", ev.soNumber());
+            return; // 지점 스코프 없으면 보낼 대상이 없음(fail-closed).
+        }
+        try {
+            notifications.save(new Notification(
+                    ev.branchWarehouseName(), ev.soNumber(),
+                    "출고요청 " + ev.soNumber() + " 작성됨 — 제출 검토 요망", ev.eventId()
+            ));
+            log.info("[notify] 지점 REQUESTED 알림 생성 so={} branch={}", ev.soNumber(), ev.branchWarehouseName());
+        } catch (RuntimeException e) {
+            log.warn("[notify] 지점 REQUESTED 알림 생성 실패(무시) so={}", ev.soNumber(), e);
+        }
+    }
+
     /** HQ 승인으로 전량 예약(IN_FULFILLMENT) → 도착 지점에 '곧 입고' 자가알림. */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)

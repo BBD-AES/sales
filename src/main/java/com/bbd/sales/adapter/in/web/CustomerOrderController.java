@@ -91,8 +91,10 @@ public class CustomerOrderController {
 
     // 종료(CONFIRMED->CLOSED): 지점 사용자(+ADMIN)
     @RequireRole({UserRole.BRANCH_STAFF, UserRole.BRANCH_MANAGER, UserRole.ADMIN})
+    @Idempotent
     @PatchMapping("/{coNumber}/close")
-    public CustomerOrderStatusChangeResponse close(@PathVariable String coNumber) {
-        return webMapper.toStatusChangeResponse(customerOrderUseCase.close(coNumber));
+    public CustomerOrderStatusChangeResponse close(@PathVariable String coNumber,
+                                                   @RequestHeader(value = "Idempotency-Key", required = false) @Size(max = 200) String idempotencyKey) {
+        return webMapper.toStatusChangeResponse(customerOrderUseCase.close(coNumber, idempotencyKey));
     }
 }
