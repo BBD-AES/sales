@@ -298,6 +298,9 @@ public class SalesOrderService implements SalesOrderUseCase {
         LocalDateTime now = LocalDateTime.now();
         so.refulfill(now);
         repository.save(so);
+        if (so.status() == SalesOrderStatus.IN_FULFILLMENT) {
+            eventPublisher.publishInFulfillment(so.soNumber(), so.toWarehouseName());
+        }
         return statusChange(so, user.employeeNumber(), now, null);
     }
 

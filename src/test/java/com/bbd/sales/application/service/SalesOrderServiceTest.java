@@ -256,6 +256,7 @@ class SalesOrderServiceTest {
         service.fulfillBackorder("SO-1");
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.IN_FULFILLMENT);
+        verify(eventPublisher).publishInFulfillment("SO-1", "강남 1지점");
     }
 
     @Test
@@ -271,6 +272,7 @@ class SalesOrderServiceTest {
 
         assertThat(so.status()).isEqualTo(SalesOrderStatus.BACKORDERED);
         assertThat(so.lines().get(0).reservedQuantity()).isEqualTo(2);
+        verify(eventPublisher, never()).publishInFulfillment(any(), any());
     }
 
     @Test
