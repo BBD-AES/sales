@@ -26,8 +26,8 @@ import java.util.Map;
 @Component
 public class SalesOrderWebMapper {
 
-    // ---------- 요청 -> 입력 ----------
-
+    /** 현재는 raw 파라미터를 그대로 query를 만드는 데에 사용하고 있지만,
+     * 창고 코드 대문자화 등 파라미터 변화가 있을 때 그 로직이 애플리케이션 계층에 새지 않도록 함*/
     public SearchSalesOrderQuery toSearchQuery(
             SalesOrderStatus status, SalesOrderPriority priority,
             String toWarehouseCode, String requestedBy, String receivedBy,
@@ -58,7 +58,6 @@ public class SalesOrderWebMapper {
 
     public ReserveLineCommand toReserveLineCommand(String soNumber, ReserveLineRequest req, String idempotencyKey) {
         // 멱등 토큰 일원화: 게이트웨이가 강제하는 Idempotency-Key 헤더를 우선 사용.
-        // 레거시 클라이언트(헤더 미전송)는 바디 requestId 로 폴백 — 헤더 표준 전환기 호환.
         String token = (idempotencyKey != null && !idempotencyKey.isBlank()) ? idempotencyKey : req.requestId();
         return new ReserveLineCommand(soNumber, req.sku(), req.warehouseCode(), req.quantity(), token);
     }
@@ -74,8 +73,6 @@ public class SalesOrderWebMapper {
                 .map(l -> new SalesOrderLineCommand(l.sku(), l.quantity()))
                 .toList();
     }
-
-    // ---------- 출력 -> 응답 ----------
 
     public SalesOrderPageResponse<SalesOrderSummaryResponse> toSummaryPageResponse(
             SalesOrderPageResult<SalesOrderSummaryResult> result) {

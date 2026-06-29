@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 대시보드 집계 결과(#74). 상태별 카운트 + 백오더 분석.
+ * 대시보드 집계 결과. 상태별 카운트 + 백오더 분석.
  * 지점 사용자는 본인 창고로 스코프된 값(서비스에서 처리).
  */
 public record SalesOrderStatsResult(

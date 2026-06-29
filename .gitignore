@@ -54,3 +54,4 @@ src/main/resources/application-*.properties
 .claude
 
 .gradle/gradle.properties
+gradle/gradle.properties
