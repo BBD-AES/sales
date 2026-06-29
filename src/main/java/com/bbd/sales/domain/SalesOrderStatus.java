@@ -3,15 +3,15 @@ package com.bbd.sales.domain;
 /**
  * 출고 요청(StockTransferRequest) 상태.
  *
- * 헥사고날에서 enum 은 "도메인 언어" 그 자체라 domain 패키지에 둔다.
+ * 단순 응답 코드가 아닌 출고요청의 생명주기를 포함하는 도메인 언어.
  * 상태 전이 규칙(어떤 상태에서 무엇이 가능한가)은 SalesOrder 애그리거트가 강제하고,
- * 여기서는 값과 전이 가능 여부 질의만 제공한다.
+ * 여기서는 '값'과 '전이 가능 여부' 질의만 제공한다.
  *
  * 정상 흐름:  REQUESTED -> SUBMITTED -> (IN_FULFILLMENT | BACKORDERED) -> RECEIVED
  *   - REQUESTED      : 지점 작성자(BRANCH_STAFF)가 생성, 지점 내부 검토 단계
  *   - SUBMITTED      : 지점 관리자(BRANCH_MANAGER)가 HQ로 제출, HQ 결정 대기
  *   - IN_FULFILLMENT : HQ 승인 + 재고 예약 완료, 실물 이동 진행 중
- *   - BACKORDERED    : HQ 승인했으나 재고 부족 -> PO 대기 (전이 연결은 PO 커밋에서)
+ *   - BACKORDERED    : HQ 승인했으나 재고 부족 -> PO 대기
  *   - RECEIVED       : 지점 수령 완료(종료)
  * 종료 분기:  SUBMITTED -> REJECTED(HQ 반려) / {REQUESTED,SUBMITTED} -> CANCELED(요청자 철회)
  */

@@ -47,10 +47,11 @@ public class SalesOrderService implements SalesOrderUseCase {
     private final ItemPort itemPort;
     private final WarehousePort warehousePort;
     private final CurrentUserProvider currentUserProvider;
-    private final IdempotencyGuard idempotencyGuard; // #71: 생성 멱등(Idempotency-Key)
+    private final IdempotencyGuard idempotencyGuard; // 생성 멱등(Idempotency-Key)
 
     // ============================ 조회 ============================
 
+    /** 사용자 권한에 맞는 조회 스코프와 검색조건을 조립해 SO 목록을 페이징 조회함 */
     @Override
     @Transactional(readOnly = true)
     public SalesOrderPageResult<SalesOrderSummaryResult> search(SearchSalesOrderQuery query) {
@@ -64,7 +65,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         } else {
             String warehouseName = user.warehouseName();
             if (warehouseName == null || warehouseName.isBlank()) {
-                // 정상 경로에선 resolver 가 BRANCH의 tenancyName을 항상 채움. 방어용(인증 컨텍스트 불완전(.
+                // 정상 경로에선 resolver 가 BRANCH의 tenancyName을 항상 채움
                 throw new ApiException(ErrorCode.AUTH_HEADER_REQUIRED);
             }
             codeFilter = null; // 지점이 넘긴 코드 필터 무시 -> 타지점 열람 차단
@@ -74,11 +75,13 @@ public class SalesOrderService implements SalesOrderUseCase {
         LocalDateTime from = query.startDate() != null ? query.startDate().atStartOfDay() : null;
         LocalDateTime to = query.endDate() != null ? query.endDate().atTime(LocalTime.MAX) : null;
 
+        // 영속성 검색 필터
         SalesOrderSearchCriteria criteria = new SalesOrderSearchCriteria(
                 query.status(), query.priority(), codeFilter,
                 nameScope,
                 query.requestedBy(), query.receivedBy(), from, to);
 
+        // 페이징 결과 객체
         SalesOrderPage page = repository.search(criteria, query.page(), query.size());
         List<SalesOrderSummaryResult> items = page.content().stream().map(this::toSummary).toList();
         PaginationResult pagination = new PaginationResult(
@@ -86,14 +89,16 @@ public class SalesOrderService implements SalesOrderUseCase {
         return new SalesOrderPageResult<>(items, pagination);
     }
 
+    /** SO 단건을 조회하고, 지점 사용자는 본인 창고 주문인지 검증한 뒤 상세 결과로 반환한다. */
     @Override
     @Transactional(readOnly = true)
     public SalesOrderResult get(String soNumber) {
         SalesOrder so = load(soNumber);
-        authorizeRead(so, currentUserProvider.current()); // 지점=본인창고만(이름축), HQ/ADMIN=전체.
+        authorizeRead(so, currentUserProvider.current()); // 지점=본인창고만(이름기준), HQ/ADMIN=전체.
         return toResult(so);
     }
 
+    /** 상태별 주문 수와 백오더 통계를 집계해 대시보드용 결과를 만든다. */
     @Override
     @Transactional(readOnly = true)
     public SalesOrderStatsResult stats() {
@@ -112,7 +117,7 @@ public class SalesOrderService implements SalesOrderUseCase {
 
         List<SalesOrder> backordered = repository.findAllByStatus(SalesOrderStatus.BACKORDERED, scope);
         LocalDateTime now = LocalDateTime.now();
-        // 대기일 = 요청 후 경과(별도 백오더 타임스탬프 없어 근사). 음수 방지.
+        // 대기일 = 요청 후 경과. 음수 방지.
         LongSummaryStatistics waits = backordered.stream()
                 .mapToLong(o -> Math.max(0, Duration.between(o.requestedAt(), now).toDays()))
                 .summaryStatistics();
@@ -141,29 +146,27 @@ public class SalesOrderService implements SalesOrderUseCase {
 
     // ============================ 생성/수정 ============================
 
+    /** 멱등키/창고소유권/품목 스냅샷을 검증한 뒤 신규 SO를 REQUESTED 상태로 생성함 */
     @Override
     public SalesOrderResult create(CreateSalesOrderCommand command) {
         CurrentUser user = currentUserProvider.current();
-        // 멱등 표준: 같은 Idempotency-Key 재요청은 409(이미 처리됨) — 원본 응답 캐시·재생 안 함(docs/idempotency-spec.md).
+        // 멱등 표준: 생성 성공 후 키 기록. 동시 같은 키면 UNIQUE 충돌 → 409(IDEM001) → @Transactional 롤백. DB UNIQUE 가 정확성 최종 보루.
         idempotencyGuard.ensureFirst(IdempotencyGuard.SO_CREATE, user.employeeNumber(), command.idempotencyKey());
 
-        // 창고명 스냅샷: 생성 시점에 한 번 조회(이후 읽기는 원격 호출 0). 출발지(source)는 sales가 저장 안 함.
+        // 창고명 스냅샷
         String toName = warehousePort.warehouseName(command.toWarehouseCode());
-        // 창고명 미해결(코드 폴백=조회 실패)이면 fail-fast: 코드를 이름으로 박제하면 이후 이름축 소유권검사가 영영 깨지고,
-        // 이름 기반 인가도 잘못 거부된다(인벤토리 다운 시 전 생성 차단). 코드-as-이름 저장 방지.
+        // 창고명을 조회하지 못하면 생성하지 않는다.
         if (toName == null || toName.equals(command.toWarehouseCode())) {
             throw new ApiException(ErrorCode.WAREHOUSE_NAME_UNAVAILABLE, command.toWarehouseCode());
         }
 
-        // 본인 창고 앞으로만 생성(이름축). ADMIN 예외. 역할(BRANCH_*/ADMIN)은 @RequireRole이 커버.
-        // 가드를 라인 해석/번호 채번 전에 둬 미인가 요청은 item 호출/SO 번호 소모 없이 조기 차단.
+        // 지점 사용자는 본인 창고 앞으로만 SO를 생성할 수 있다. ADMIN은 예외로 허용한다.
         if (!user.isAdmin() && !(user.isBranchUser() && toName.equals(user.warehouseName()))) {
             throw new ApiException(ErrorCode.SALES_ORDER_FORBIDDEN_WAREHOUSE);
         }
 
         List<SalesOrderLine> lines = toDomainLines(command.lines());
         String soNumber = repository.nextSoNumber();
-
 
         SalesOrder so = SalesOrder.request(
                 soNumber,
@@ -172,13 +175,14 @@ public class SalesOrderService implements SalesOrderUseCase {
                 user.employeeNumber(), LocalDateTime.now());
 
         SalesOrder saved = repository.save(so);
-        // 멱등 표준: 생성 성공 후 키 기록. 동시 같은 키면 UNIQUE 충돌 → 409(IDEM001) → @Transactional 롤백. DB UNIQUE 가 정확성 최종 보루.
+        // 생성 성공 후 멱등키를 기록해 같은 요청이 중복 생성되지 않도록 한다.
         idempotencyGuard.record(IdempotencyGuard.SO_CREATE, user.employeeNumber(), command.idempotencyKey(), saved.soNumber());
-        // 요청 지점(점장)에 '제출 검토 요망' 자가알림 — approve()의 IN_FULFILLMENT 발행과 대칭. best-effort.
+        // 생성된 SO에 대해 요청 지점 알림 이벤트를 발행한다. 알림 실패는 주문 생성을 막지 않는다.
         eventPublisher.publishRequested(saved.soNumber(), saved.toWarehouseName());
         return toResult(saved);
     }
 
+    /** 본인 창고 SO인지 확인하고 REQUESTED 상태에서 우선순위/메모/라인을 수정한다. */
     @Override
     public SalesOrderResult update(UpdateSalesOrderCommand command) {
         SalesOrder so = load(command.soNumber());
@@ -196,7 +200,7 @@ public class SalesOrderService implements SalesOrderUseCase {
     // ============================ 상태 전이 ============================
 
 
-    /** 헥사고날에서 필요성: 포트만 의존 -> 구현이 뭐든 무관*/
+    /** 지점 관리자가 REQUESTED SO를 HQ 검토 상태인 SUBMITTED로 제출함 */
     @Override
     public SalesOrderStatusChangeResult submit(String soNumber) {
         SalesOrder so = load(soNumber);
@@ -208,22 +212,21 @@ public class SalesOrderService implements SalesOrderUseCase {
         return statusChange(so, currentUserProvider.current().employeeNumber(), now, null);
     }
 
+    /** SUBMITTED SO를 REQUESTED 상태로 회수하고 기존 예약을 inventory에 반납함 */
     @Override
     public SalesOrderStatusChangeResult withdraw(String soNumber) {
-        CurrentUser currentUser = currentUserProvider.current();
         SalesOrder so = load(soNumber);
-        authorizeOwnerWrite(so, currentUser); // 본인 지점 소유(취소와 동일 가드)
+        authorizeOwnerWrite(so, currentUserProvider.current());
         LocalDateTime now = LocalDateTime.now();
         so.withdraw(now);
         repository.save(so);
-        // SUBMITTED 에서 HQ가 잡아둔 예약 반납(신모델=SUBMITTED에서 예약).
-        // #55: withdraw/cancel/reject 의 release 는 '멱등 수렴'(같은 soNumber 재release=no-op)이라 reserveLine 과 달리
-        //      비관락 없이도 이중효과가 없다 → 이 외부효과 전이들은 의도적으로 lockForUpdate 를 생략한다.
+        // SUBMITTED 상태에서 잡아둔 재고 예약을 해제한다.
+        // release는 soNumber 기준 멱등 처리되므로, 같은 요청이 다시 들어와도 중복 해제되지 않는다.
         inventoryPort.release(so.soNumber());
-        return statusChange(so, currentUser.employeeNumber(), now, null);
+        return statusChange(so, currentUserProvider.current().employeeNumber(), now, null);
     }
 
-    /** [가용 조회] 예약 화면용. 권한만 보고 inventory 현황을 그대로 전달. */
+    /** HQ 예약 화면에서 특정 SKU의 창고별 가용재고를 inventory에서 조회함 */
     @Override @Transactional(readOnly = true)
     public List<WarehouseStock> stockAvailability(String soNumber, String sku) {
         SalesOrder so = load(soNumber);
@@ -231,69 +234,78 @@ public class SalesOrderService implements SalesOrderUseCase {
         return inventoryPort.availability(sku);
     }
 
-    /** [라인 예약] 사람이 고른 '한 창고'에서 한 번. inventory에 먼저 잡고(실량 받고) → 도메인에 누적. */
+    /** HQ가 선택한 창고에 재고를 예약하고 실제 예약 수량을 SO 라인에 누적함. */
     @Override
     public SalesOrderResult reserveLine(ReserveLineCommand cmd) {
         CurrentUser user = currentUserProvider.current();
-        // #55: reserveLine 은 의도적으로 비관락을 걸지 않는다.
-        //  - reserveFromWarehouse 는 커밋 전 '외부 REST' 호출이라, 락을 잡은 채 호출하면 inventory 지연/행 동안
-        //    행 락이 유지돼 같은 SO 의 모든 전이를 봉쇄(가용성/커넥션풀 위험)한다 — 락-중-네트워크IO 안티패턴.
-        //  - 게다가 락은 '동시'만 직렬화할 뿐 '같은 requestId 재시도'의 이중계상은 못 막는다(그건 영속 dedup 몫).
-        //  → 동시/재시도 이중예약 방어는 inventory requestId 멱등키(영속 dedup)=#55 2순위(멀티창고와 함께)로 처리한다.
+        // 외부 inventory 호출을 동반하므로 주문 행 비관락은 잡지 않는다.
+        // 예약 중복 방지는 inventory의 Idempotency-Key 처리에 맡긴다.
         SalesOrder so = load(cmd.soNumber());
         authorizeDecision(user);
-        // 0) 외부 예약 호출 전에 도메인 선검증(상태/SKU) → 예약 성공 후 도메인 throw로 inventory 고아 홀드가 남는 것 방지.
+
+        // inventory 예약 전에 주문 상태와 SKU가 예약 가능한지 먼저 검증한다.
         so.assertReservable(cmd.sku());
-        if (cmd.quantity() <= 0) {   // 비양수 수량 로컬 차단(@Positive 웹검증 외 서비스 경계 방어) → inventory에 0/음수 미전달
+
+        if (cmd.quantity() <= 0) {
             throw new IllegalArgumentException("예약 수량은 1 이상이어야 합니다: " + cmd.quantity());
         }
-        // 1) 요청을 미충족분(shortfall)으로 clamp — 필요수량 초과 예약(inventory 고아 holds) 방지. 이미 충족이면 거부.
+        // 필요한 미충족 수량까지만 예약 요청한다.
         int shortfall = so.shortfallFor(cmd.sku());
         if (shortfall <= 0) {
             throw new ApiException(ErrorCode.SALES_ORDER_LINE_FULLY_RESERVED);
         }
         int want = Math.min(cmd.quantity(), shortfall);
-        // 2) inventory 예약(동기, 원자) → 실제 잡힌 양. idempotencyKey=공통 멱등 토큰(inventory dedup 키로 전파).
+        // inventory가 실제로 예약한 수량만 SO 라인에 반영한다.
         ReservationResult rr = inventoryPort.reserveFromWarehouse(
                 cmd.idempotencyKey(), so.soNumber(), cmd.sku(), cmd.warehouseCode(), want);
-        // 3) 실제 잡힌 양만 도메인 라인에 누적(상태 그대로 SUBMITTED).
-        //    (주의) 같은 멱등키 재요청 시 inventory 멱등 반환을 sales가 또 누적하는 이중계상은 inventory 영속 dedup(UNIQUE)로 분리.
+
         so.reserveLine(cmd.sku(), rr.reserved());
         repository.save(so);
         return toResult(so);   // 응답에 라인별 reservedQuantity/부족분 → 사람이 보고 또 예약
     }
 
-    /** [확정] approve — 자동예약 제거. 이미 잡힌 상태를 확정만. */
+    /** HQ가 SUBMITTED SO를 승인하고, 예약 충족 여부에 따라 IN_FULFILLMENT 또는 BACKORDERED로 전이한다. */
     @Override
     public SalesOrderStatusChangeResult approve(String soNumber) {
         CurrentUser user = currentUserProvider.current();
-        authorizeDecision(user); // 역할 인가를 락 획득 전에 — 비인가 호출이 행 락을 잡아 정상 전이를 막는 것 방지(CodeRabbit #55)
-        repository.lockForUpdate(soNumber); // #55 P1: 확정+구매통지(아웃박스) 동시 진입 직렬화(낙관락 보강, 깔끔한 충돌 의미)
+
+        // 비인가 요청이 주문 행 락을 잡지 않도록 권한을 먼저 검사한다.
+        authorizeDecision(user);
+
+        // 같은 SO에 대한 동시 승인/재확정을 막기 위해 주문 행을 잠근다.
+        repository.lockForUpdate(soNumber);
+
         SalesOrder so = load(soNumber);
-        so.confirmByHq(user.employeeNumber(), LocalDateTime.now());   // reserveAndRoute 호출 없음!
+
+        // 도메인이 상태 전이와 충족 여부 판단을 수행한다.
+        so.confirmByHq(user.employeeNumber(), LocalDateTime.now());
+
         repository.save(so);
-        // 부족분 남으면(BACKORDERED) procurement에 통지(기존 이벤트 그대로)
+
+        // 부족분이 있으면 procurement에 구매 요청을 보낸다.
         List<ShortfallLine> shortfall = so.shortfallLines();
         if (!shortfall.isEmpty()) {
             procurementPort.requestPurchase(so.soNumber(), so.toWarehouseCode(), shortfall);
         }
-        // 부족분으로 BACKORDERED 가 되면 HQ 자가알림(best-effort, AFTER_COMMIT — 핵심 전이 비차단).
+
+        // 백오더 상태면 HQ 알림을 발행한다.
         if (so.status() == SalesOrderStatus.BACKORDERED) {
             eventPublisher.publishBackordered(so.soNumber());
         }
-        // 전량 예약돼 IN_FULFILLMENT 가 되면 도착 지점에 '곧 입고' 자가알림(targetRole=지점 창고명, 이름축).
+
+        // 전량 충족 상태면 도착 지점 알림을 발행한다.
         if (so.status() == SalesOrderStatus.IN_FULFILLMENT) {
             eventPublisher.publishInFulfillment(so.soNumber(), so.toWarehouseName());
         }
         return statusChange(so, user.employeeNumber(), so.approvedAt(), null);
     }
 
-    /** [재확정] fulfill-backorder — 재예약 없음(예약은 reserveLine으로 이미 함). 확정만. */
+    /** BACKORDERED SO의 보충 예약 결과를 다시 확정해 충족되면 IN_FULFILLMENT로 전이시킴 */
     @Override
     public SalesOrderStatusChangeResult fulfillBackorder(String soNumber) {
         CurrentUser user = currentUserProvider.current();
-        authorizeDecision(user); // 역할 인가를 락 획득 전에(CodeRabbit #55)
-        repository.lockForUpdate(soNumber); // #55 P1: 백오더 재확정 동시 진입 직렬화
+        authorizeDecision(user);
+        repository.lockForUpdate(soNumber);
         SalesOrder so = load(soNumber);
         LocalDateTime now = LocalDateTime.now();
         so.refulfill(now);
@@ -304,6 +316,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         return statusChange(so, user.employeeNumber(), now, null);
     }
 
+    /** 지점 사용자가 REQUESTED SO를 취소하고 잡혀 있던 예약을 inventory에 반납함 */
     @Override
     public SalesOrderStatusChangeResult cancel(String soNumber) {
         SalesOrder so = load(soNumber);
@@ -315,6 +328,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         return statusChange(so, currentUserProvider.current().employeeNumber(), so.canceledAt(), null);
     }
 
+    /** HQ가 SUBMITTED SO를 사유와 함께 반려하고 잡혀 있던 예약을 inventory에 반납함 */
     @Override
     public SalesOrderStatusChangeResult reject(String soNumber, String reason) {
         CurrentUser currentUser = currentUserProvider.current();
@@ -326,6 +340,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         return statusChange(so, currentUser.employeeNumber(), so.rejectedAt(), so.rejectedReason());
     }
 
+    /** 지점 사용자가 IN_FULFILLMENT SO를 RECEIVED로 닫고 수령 이벤트를 발행함 */
     @Override
     public SalesOrderStatusChangeResult receive(String soNumber) {
         CurrentUser currentUser = currentUserProvider.current();
@@ -349,24 +364,13 @@ public class SalesOrderService implements SalesOrderUseCase {
 
     // ============================ 내부 헬퍼 ============================
 
+    /** soNumber로 SO를 조회하고 없으면 NOT_FOUND를 던짐 */
     private SalesOrder load(String soNumber) {
         return repository.findBySoNumber(soNumber)
                 .orElseThrow(() -> new ApiException(ErrorCode.SALES_ORDER_NOT_FOUND));
     }
 
-    /*
-     * 권한 매트릭스 (의도된 설계 — 규칙 변경 시 이 표도 함께 갱신):
-     *   생성        : 본인창고 지점 사용자, ADMIN
-     *   조회        : HQ(전체), 지점(본인창고만), ADMIN
-     *   수정        : 본인창고 지점 사용자, ADMIN   (REQUESTED 에서만)
-     *   제출(->HQ)  : 본인창고 BRANCH_MANAGER, ADMIN  (REQUESTED -> SUBMITTED)
-     *   취소        : 본인창고 지점 사용자, ADMIN   (REQUESTED 에서만; 제출 후는 withdraw 로 되돌린 뒤)
-     *   승인/반려   : HQ_MANAGER, ADMIN            (SUBMITTED 에서)
-     *   수령(도착)  : 본인창고 지점 사용자, ADMIN   (IN_FULFILLMENT 에서)
-     *
-     * 참고: PDF 스펙의 HQ_STAFF '출고(SHIP)처리'는 팀이 SHIPPED 단계를 제거하고
-     *       RECEIVED 전이로 통합했기에 별도 ship 권한이 없다(도착확인=지점 몫).
-     */
+    /** 조회 권한을 검사해 HQ는 전체, 지점은 본인 창고 SO만 허용한다. */
     private void authorizeRead(SalesOrder so, CurrentUser user) {
         if (user.isHq()) return;   // 본사(ADMIN/HQ_*)는 전 창고 조회 — 창고 비스코핑
         if (!so.ownedByWarehouseName(user.warehouseName())) {
@@ -374,7 +378,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         }
     }
 
-    /** 쓰기(수정/취소/수령): 본인 창고의 지점 사용자(또는 ADMIN), 역할은 @RequireRole 가 커버. */
+    /** 수정/취소/수령 같은 지점 쓰기 작업이 본인 창고 SO에만 가능하도록 막는다. */
     private void authorizeOwnerWrite(SalesOrder so, CurrentUser user) {
         if (user.isAdmin()) return;
         if (!(user.isBranchUser() && so.ownedByWarehouseName(user.warehouseName()))) {
@@ -382,7 +386,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         }
     }
 
-    /** 제출(HQ로 올림)은 본인 창고의 지점 관리자(또는 ADMIN). 역할은 @RequireRole({BRANCH_MANAGER, ADMIN})가 커버. */
+    /** (본사에) 제출하는 작업이 본인 창고 SO에 대해서만 가능하도록 소유권을 검사한다.*/
     private void authorizeSubmit(SalesOrder so, CurrentUser user) {
         if (user.isAdmin()) return;
         if (!so.ownedByWarehouseName(user.warehouseName())) {
@@ -390,6 +394,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         }
     }
 
+    /** HQ 승인/반려/예약 같은 결정 작업 권한이 있는지 서비스 계층에서 한 번 더 검사한다. */
     private void authorizeDecision(CurrentUser user) {
         // 방어적 인가(서비스 경계): @RequireRole(컨트롤러)가 1차 게이트지만, 비-웹 진입점 대비 서비스도 자체 강제.
         if (!user.canDecide()) {
@@ -397,6 +402,7 @@ public class SalesOrderService implements SalesOrderUseCase {
         }
     }
 
+    /** 요청 라인의 SKU를 item에서 조회해 이름/단가/조달유형 스냅샷을 채운 도메인 라인으로 변환한다. */
     private List<SalesOrderLine> toDomainLines(List<SalesOrderLineCommand> lineCommands) {
         List<SalesOrderLine> lines = new ArrayList<>();
         List<String> inactive = new ArrayList<>();
@@ -407,7 +413,7 @@ public class SalesOrderService implements SalesOrderUseCase {
                 inactive.add(p.sku());
                 continue;
             }
-            // 사용자가 입력한 순서대로 라인 번호 저장. sourcingType 도 생성 시점 스냅샷(백오더 라우팅 힌트, item 재조회 불필요).
+            // 사용자가 입력한 순서대로 라인 번호 저장.
             lines.add(new SalesOrderLine(lineNo++, p.sku(), p.name(), p.unitPrice(), p.sourcingType(), lc.quantity()));
         }
         if (!inactive.isEmpty()) {
@@ -416,10 +422,12 @@ public class SalesOrderService implements SalesOrderUseCase {
         return lines;
     }
 
+    /** 상태전이 응답에 필요한 주문번호/상태/처리자/시각/사유를 묶어 변환한다. */
     private SalesOrderStatusChangeResult statusChange(SalesOrder so, String actor, LocalDateTime at, String reason) {
         return new SalesOrderStatusChangeResult(so.soNumber(), so.status(), actor, at, reason);
     }
 
+    /** SO 도메인 객체 상세 응답용 application result로 변환한다. */
     private SalesOrderResult toResult(SalesOrder so) {
         List<SalesOrderLineResult> lines = so.lines().stream()
                 .map(l -> new SalesOrderLineResult(
@@ -436,6 +444,7 @@ public class SalesOrderService implements SalesOrderUseCase {
                 lines);
     }
 
+    /** SO 도메인 객체를 목록 응답용 summary result로 변환한다. */
     private SalesOrderSummaryResult toSummary(SalesOrder so) {
         return new SalesOrderSummaryResult(
                 so.soNumber(),

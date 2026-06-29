@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 
 /**
  * 영속성 검색 필터. 권한/스코프가 이미 반영된 '순수 필터'다.
- * (지점 사용자 본인창고 한정 같은 스코핑은 서비스가 적용한 뒤 여기에 toWarehouseCode 로 박아 넘긴다)
+ * (지점 사용자 본인창고 한정 같은 스코핑은 서비스가 적용한 뒤 여기에 toWarehouseCode 로 고정해서 넘긴다)
  */
 public record SalesOrderSearchCriteria(
         SalesOrderStatus status,
@@ -15,7 +15,7 @@ public record SalesOrderSearchCriteria(
         String toWarehouseCode, // HQ 선택 필터(코드 기준)
         String toWarehouseName, // 지점 본인창고 스코핑(이름 기준)
         String requestedBy,
-        String receivedBy,      // 모바일 M-WORKLOG: 내가 도착 확인(receive)한 SO
+        String receivedBy,      // 내가 도착 확인(receive)한 SO
         LocalDateTime from,
         LocalDateTime to
 ) {

@@ -19,7 +19,7 @@ public interface SalesOrderJpaRepository
     Optional<SalesOrderJpaEntity> findBySoNumber(String soNumber);
 
     /**
-     * 행 비관적 쓰기락(SELECT ... FOR UPDATE) — 최신 커밋 상태를 잠그고 적재한다(#55 P1).
+     * 행 비관적 쓰기락(SELECT ... FOR UPDATE) — 최신 커밋 상태를 잠그고 적재한다.
      * <p>대상: approve/receive/fulfillBackorder 처럼 외부효과가 <b>트랜잭션 아웃박스(빠른 로컬 INSERT)</b>이거나 없는 전이.
      * 같은 주문에 동시 진입해도 한 번에 하나만 진행시켜 낙관락 충돌을 깔끔한 직렬화로 바꾼다.
      * <p>일부러 제외: reserveLine — 외부 'REST' 예약을 락 보유 트랜잭션 안에서 호출하면 락-중-네트워크IO 로
@@ -35,11 +35,11 @@ public interface SalesOrderJpaRepository
     @Query("select max(s.soNumber) from SalesOrderJpaEntity s where s.soNumber like :pattern")
     Optional<String> findMaxSoNumber(@Param("pattern") String pattern);
 
-    /** 대시보드(#74): 상태별 카운트(지점 스코프 — :scope null=전체). 반환 행: [SalesOrderStatus, Long]. */
+    /** 대시보드: 상태별 카운트(지점 스코프 — :scope null=전체). 반환 행: [SalesOrderStatus, Long]. */
     @Query("select s.status, count(s) from SalesOrderJpaEntity s where (:scope is null or s.toWarehouseName = :scope) group by s.status")
     List<Object[]> countGroupByStatus(@Param("scope") String scope);
 
-    /** 대시보드(#74): 특정 상태 전체(지점 스코프). 백오더 분석용(라인은 @BatchSize 로 적재). */
+    /** 대시보드: 특정 상태 전체(지점 스코프). 백오더 분석용(라인은 @BatchSize 로 적재). */
     @Query("select s from SalesOrderJpaEntity s where s.status = :status and (:scope is null or s.toWarehouseName = :scope)")
     List<SalesOrderJpaEntity> findAllByStatusScoped(@Param("status") SalesOrderStatus status, @Param("scope") String scope);
 }

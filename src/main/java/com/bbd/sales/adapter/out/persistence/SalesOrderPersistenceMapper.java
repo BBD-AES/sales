@@ -7,10 +7,11 @@ import org.springframework.stereotype.Component;
 import java.util.Comparator;
 import java.util.List;
 
-/** 도메인 <-> JPA 엔티티 변환(경계 번역기). 복원은 SalesOrder.reconstitute 로 무검증 재구성. */
+/** 도메인 <-> JPA 엔티티 변환(경계 번역기). */
 @Component
 public class SalesOrderPersistenceMapper {
 
+    /** 신규 저장용 JPA 엔티티를 생성한 뒤 applyTo로 도메인 값을 변경한다. */
     public SalesOrderJpaEntity toNewEntity(SalesOrder so) {
         SalesOrderJpaEntity entity = new SalesOrderJpaEntity(
                 so.soNumber(), so.toWarehouseCode(), so.toWarehouseName()
@@ -19,6 +20,7 @@ public class SalesOrderPersistenceMapper {
         return entity;
     }
 
+    /** 이미 존재하는 엔티티의 식별자와 version(낙관적 락용 필드)은 유지한 채 변경 가능한 필드만 갱신한다. */
     public void applyTo(SalesOrderJpaEntity entity, SalesOrder so) {
         entity.setStatus(so.status());
         entity.setPriority(so.priority());
@@ -48,6 +50,7 @@ public class SalesOrderPersistenceMapper {
         entity.replaceLines(lineEntities);
     }
 
+    /** DB에서 조회한 JPA 엔티티를 업무 로직에서 사용할 SalesOrder 도메인 객체로 변환한다. */
     public SalesOrder toDomain(SalesOrderJpaEntity e) {
         List<SalesOrderLine> lines = e.getLines().stream()
                 .sorted(Comparator.comparingInt(SalesOrderLineJpaEntity::getLineNo))

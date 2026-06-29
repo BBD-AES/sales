@@ -30,7 +30,7 @@ import java.util.List;
 // 인가 정책: 엔드포인트별 @RequireRole 로 역할 게이트.
 //   - RoleAuthorizationAspect(AOP)가 JWT의 UserSnapshot.role 을 검증(메서드 우선, 위반=FORBIDDEN_ROLE).
 //   - 창고 소유권 등 "데이터 단위" 인가는 역할로 못 거르므로 서비스 계층(authorize*)이 담당.
-//   - 신규 엔드포인트는 반드시 @RequireRole 를 직접 달 것(클래스 기본값 없음 = 미부착 시 역할 무제한).
+//   - @RequireRole 클래스 기본값 없음 = 미부착 시 역할 무제한
 @RestController
 @RequiredArgsConstructor
 @Validated   // @RequestParam 등 메서드 파라미터 제약(@NotBlank) 활성화
@@ -41,6 +41,7 @@ public class SalesOrderController {
     private final SalesOrderWebMapper webMapper;
 
     // 조회(목록): 전 직무 허용. 본사=전체 / 지점=본인창고 스코핑은 서비스에서.
+    //
     @RequireRole({UserRole.HQ_MANAGER, UserRole.HQ_STAFF, UserRole.BRANCH_MANAGER, UserRole.BRANCH_STAFF, UserRole.ADMIN})
     @GetMapping
     public SalesOrderPageResponse<SalesOrderSummaryResponse> search(
@@ -52,7 +53,7 @@ public class SalesOrderController {
             @RequestParam(required = false, name = "start_date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
             @RequestParam(required = false, name = "end_date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate,
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Positive int size  // 음수 page/비양수 size 는 경계에서 거부(silent clamp 의존 X)
+            @RequestParam(defaultValue = "20") @Positive int size
     ) {
         return webMapper.toSummaryPageResponse(
                 salesOrderUseCase.search(webMapper.toSearchQuery(
